@@ -1,6 +1,8 @@
 import AppKit
 import WebKit
 
+// MARK: - AppDelegate
+
 /// App delegate to control application lifecycle behavior.
 /// Keeps the app running when windows are closed so audio playback continues.
 @MainActor
@@ -15,17 +17,60 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_: Notification) {
         // Set up window delegate to intercept close and hide instead
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(500))
             self.setupWindowDelegate()
         }
     }
 
     private func setupWindowDelegate() {
-        for window in NSApplication.shared.windows {
-            if window.canBecomeMain {
-                window.delegate = self
-            }
+        for window in NSApplication.shared.windows where window.canBecomeMain {
+            window.delegate = self
         }
+    }
+
+    // MARK: - Dock Menu
+
+    func applicationDockMenu(_: NSApplication) -> NSMenu? {
+        let menu = NSMenu()
+
+        let playPauseItem = NSMenuItem(
+            title: "Play/Pause",
+            action: #selector(dockMenuPlayPause),
+            keyEquivalent: ""
+        )
+        playPauseItem.target = self
+        menu.addItem(playPauseItem)
+
+        let nextItem = NSMenuItem(
+            title: "Next Track",
+            action: #selector(dockMenuNext),
+            keyEquivalent: ""
+        )
+        nextItem.target = self
+        menu.addItem(nextItem)
+
+        let previousItem = NSMenuItem(
+            title: "Previous Track",
+            action: #selector(dockMenuPrevious),
+            keyEquivalent: ""
+        )
+        previousItem.target = self
+        menu.addItem(previousItem)
+
+        return menu
+    }
+
+    @objc private func dockMenuPlayPause() {
+        SingletonPlayerWebView.shared.playPause()
+    }
+
+    @objc private func dockMenuNext() {
+        SingletonPlayerWebView.shared.next()
+    }
+
+    @objc private func dockMenuPrevious() {
+        SingletonPlayerWebView.shared.previous()
     }
 
     /// Keep app running when the window is closed (for background audio).
@@ -153,7 +198,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 }
 
-// MARK: - Player WebView Coordinator
+// MARK: - PlayerWebViewCoordinator
 
 final class PlayerWebViewCoordinator: NSObject, WKNavigationDelegate, WKScriptMessageHandler {
     weak var webView: WKWebView?
@@ -183,7 +228,7 @@ final class PlayerWebViewCoordinator: NSObject, WKNavigationDelegate, WKScriptMe
     }
 }
 
-// MARK: - NSWindowDelegate
+// MARK: - AppDelegate + NSWindowDelegate
 
 extension AppDelegate: NSWindowDelegate {
     /// Intercept window close and hide instead, keeping WebView alive for background audio.

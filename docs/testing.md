@@ -1,0 +1,306 @@
+# Testing Guide
+
+This document covers testing strategies, commands, and best practices for YouTube Music.
+
+## Test Commands
+
+### Unit Tests
+
+```bash
+xcodebuild -scheme YouTubeMusic -destination 'platform=macOS' test -only-testing:YouTubeMusicTests
+```
+
+### Full Suite
+
+```bash
+xcodebuild -scheme YouTubeMusic -destination 'platform=macOS' test
+```
+
+### Build Only
+
+```bash
+xcodebuild -scheme YouTubeMusic -destination 'platform=macOS' build
+```
+
+### Lint & Format
+
+```bash
+swiftlint --strict && swiftformat .
+```
+
+## Unit Test Requirements
+
+New code in `Core/` (Services, Models, ViewModels, Utilities) must include unit tests.
+
+### Creating a Test File
+
+1. Create test file in `Tests/YouTubeMusicTests/` matching the source file name
+   - Example: `YTMusicClient.swift` → `YTMusicClientTests.swift`
+2. Add the test file to the Xcode project
+3. Run tests to verify
+
+### Test File Template
+
+```swift
+import XCTest
+@testable import YouTubeMusic
+
+@MainActor
+final class MyServiceTests: XCTestCase {
+    var sut: MyService!
+
+    override func setUp() async throws {
+        // Do NOT call super.setUp() in @MainActor async context
+        sut = MyService()
+    }
+
+    override func tearDown() async throws {
+        sut = nil
+        // Do NOT call super.tearDown() in @MainActor async context
+    }
+
+    func testSomething() async throws {
+        // Arrange
+        // ...
+
+        // Act
+        let result = try await sut.doSomething()
+
+        // Assert
+        XCTAssertNotNil(result)
+    }
+}
+```
+
+### @MainActor Test Classes
+
+For tests of `@MainActor` classes (most services), use async setUp/tearDown **without calling super**:
+
+```swift
+@MainActor
+final class PlayerServiceTests: XCTestCase {
+    override func setUp() async throws {
+        // ⚠️ Do NOT call: try await super.setUp()
+        // XCTestCase is not Sendable, calling super crosses actor boundaries
+    }
+    
+    override func tearDown() async throws {
+        // ⚠️ Do NOT call: try await super.tearDown()
+    }
+}
+```
+
+**Why?** `XCTestCase` is not `Sendable`. Calling `super.setUp()` from a `@MainActor` async context sends `self` across actor boundaries, causing Swift 6 strict concurrency errors.
+
+## Environment Isolation
+
+### Using MockURLProtocol
+
+For network testing without real API calls:
+
+```swift
+// In test setup
+let config = URLSessionConfiguration.ephemeral
+config.protocolClasses = [MockURLProtocol.self]
+let session = URLSession(configuration: config)
+
+// Set response handler
+MockURLProtocol.requestHandler = { request in
+    let json = """
+    {"id": "123", "data": [...]}
+    """
+    let response = HTTPURLResponse(
+        url: request.url!,
+        statusCode: 200,
+        httpVersion: nil,
+        headerFields: nil
+    )!
+    return (response, json.data(using: .utf8)!)
+}
+```
+
+## Test Categories
+
+### Service Tests
+
+Test business logic in isolation:
+
+```swift
+func testAuthServiceLoginState() async {
+    // Given
+    let authService = AuthService()
+    
+    // When
+    authService.startLogin()
+    
+    // Then
+    XCTAssertEqual(authService.state, .loggingIn)
+}
+```
+
+### Model Tests
+
+Test Codable conformance and parsing:
+
+```swift
+func testSongDecoding() throws {
+    let json = """
+    {"videoId": "abc123", "title": "Test Song", "artist": "Test Artist"}
+    """.data(using: .utf8)!
+    
+    let song = try JSONDecoder().decode(Song.self, from: json)
+    
+    XCTAssertEqual(song.videoId, "abc123")
+    XCTAssertEqual(song.title, "Test Song")
+}
+```
+
+### ViewModel Tests
+
+Test state management and loading:
+
+```swift
+func testHomeViewModelLoading() async throws {
+    let viewModel = HomeViewModel(client: mockClient)
+    
+    await viewModel.load()
+    
+    XCTAssertFalse(viewModel.isLoading)
+    XCTAssertFalse(viewModel.sections.isEmpty)
+}
+```
+
+## Mocking Guidelines
+
+### Mock Services
+
+Create protocol-based mocks for dependencies:
+
+```swift
+protocol YTMusicClientProtocol {
+    func getHome() async throws -> HomeResponse
+}
+
+class MockYTMusicClient: YTMusicClientProtocol {
+    var homeResponse: HomeResponse?
+    var error: Error?
+    
+    func getHome() async throws -> HomeResponse {
+        if let error { throw error }
+        return homeResponse!
+    }
+}
+```
+
+### Dependency Injection
+
+Services should accept dependencies for testing:
+
+```swift
+@MainActor @Observable
+final class HomeViewModel {
+    private let client: YTMusicClientProtocol
+    
+    init(client: YTMusicClientProtocol = YTMusicClient.shared) {
+        self.client = client
+    }
+}
+```
+
+## Accessibility Testing
+
+### VoiceOver
+
+Test with VoiceOver enabled:
+
+1. Enable: System Settings → Accessibility → VoiceOver
+2. Navigate app using keyboard (Tab, Cmd+arrows)
+3. Verify all controls have labels
+
+### Required Labels
+
+All icon-only buttons must have accessibility labels:
+
+```swift
+Button {
+    playerService.playPause()
+} label: {
+    Image(systemName: "play.fill")
+}
+.accessibilityLabel("Play")
+```
+
+## Integration Testing
+
+### Manual Test Checklist
+
+Before releasing:
+
+- [ ] Fresh login works (delete app data first)
+- [ ] Home page loads with content
+- [ ] Search returns results
+- [ ] Playback starts on click
+- [ ] Track changes work
+- [ ] Background audio works (close window)
+- [ ] Media keys work
+- [ ] Re-opening window doesn't duplicate audio
+- [ ] Sign out and re-login works
+
+### Simulating Auth Expiry
+
+To test auth recovery:
+
+1. Open Safari → Develop → Show Web Inspector (for any WebView)
+2. Storage → Cookies → Delete `__Secure-3PAPISID`
+3. Trigger an API call → should show login sheet
+
+## Debugging
+
+### Console Logging
+
+Use Xcode's Console to filter logs:
+
+```
+subsystem:YouTubeMusic category:player
+subsystem:YouTubeMusic category:auth
+```
+
+### WebView Debugging
+
+Enable Web Inspector for debug builds:
+
+```swift
+#if DEBUG
+    webView.isInspectable = true
+#endif
+```
+
+Right-click WebView → Inspect Element
+
+## Continuous Integration
+
+### GitHub Actions Workflow
+
+```yaml
+name: Build & Test
+
+on: [push, pull_request]
+
+jobs:
+  build:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode_15.app
+      
+      - name: Build
+        run: xcodebuild -scheme YouTubeMusic -destination 'platform=macOS' build
+      
+      - name: Test
+        run: xcodebuild -scheme YouTubeMusic -destination 'platform=macOS' test
+      
+      - name: Lint
+        run: swiftlint --strict
+```

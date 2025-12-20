@@ -1022,13 +1022,21 @@ final class YTMusicClient {
                let thumbData = musicThumbnailRenderer["thumbnail"] as? [String: Any],
                let thumbnails = thumbData["thumbnails"] as? [[String: Any]]
             {
-                return thumbnails.compactMap { $0["url"] as? String }
+                return thumbnails.compactMap { $0["url"] as? String }.map(normalizeURL)
             }
             if let thumbnails = thumbnail["thumbnails"] as? [[String: Any]] {
-                return thumbnails.compactMap { $0["url"] as? String }
+                return thumbnails.compactMap { $0["url"] as? String }.map(normalizeURL)
             }
         }
         return []
+    }
+
+    /// Normalizes a URL string by adding https: prefix to protocol-relative URLs.
+    private func normalizeURL(_ urlString: String) -> String {
+        if urlString.hasPrefix("//") {
+            return "https:" + urlString
+        }
+        return urlString
     }
 
     private func extractArtists(from data: [String: Any]) -> [Artist] {

@@ -58,4 +58,64 @@ final class PlayerServiceTests: XCTestCase {
         XCTAssertTrue(playerService.queue.isEmpty)
         XCTAssertEqual(playerService.currentIndex, 0)
     }
+
+    func testUpdatePlaybackState() {
+        playerService.updatePlaybackState(isPlaying: true, progress: 30.0, duration: 180.0)
+
+        XCTAssertEqual(playerService.state, .playing)
+        XCTAssertEqual(playerService.progress, 30.0)
+        XCTAssertEqual(playerService.duration, 180.0)
+        XCTAssertTrue(playerService.isPlaying)
+    }
+
+    func testUpdatePlaybackStatePaused() {
+        // First set to playing
+        playerService.updatePlaybackState(isPlaying: true, progress: 30.0, duration: 180.0)
+        XCTAssertEqual(playerService.state, .playing)
+
+        // Then pause
+        playerService.updatePlaybackState(isPlaying: false, progress: 30.0, duration: 180.0)
+        XCTAssertEqual(playerService.state, .paused)
+        XCTAssertFalse(playerService.isPlaying)
+    }
+
+    func testUpdateTrackMetadata() {
+        playerService.updateTrackMetadata(
+            title: "Test Song",
+            artist: "Test Artist",
+            thumbnailUrl: "https://example.com/thumb.jpg"
+        )
+
+        XCTAssertNotNil(playerService.currentTrack)
+        XCTAssertEqual(playerService.currentTrack?.title, "Test Song")
+        XCTAssertEqual(playerService.currentTrack?.artistsDisplay, "Test Artist")
+        XCTAssertEqual(playerService.currentTrack?.thumbnailURL?.absoluteString, "https://example.com/thumb.jpg")
+    }
+
+    func testUpdateTrackMetadataWithEmptyThumbnail() {
+        playerService.updateTrackMetadata(
+            title: "Test Song",
+            artist: "Test Artist",
+            thumbnailUrl: ""
+        )
+
+        XCTAssertNotNil(playerService.currentTrack)
+        XCTAssertEqual(playerService.currentTrack?.title, "Test Song")
+        XCTAssertNil(playerService.currentTrack?.thumbnailURL)
+    }
+
+    func testConfirmPlaybackStarted() {
+        playerService.showMiniPlayer = true
+        playerService.confirmPlaybackStarted()
+
+        XCTAssertFalse(playerService.showMiniPlayer)
+        XCTAssertEqual(playerService.state, .playing)
+    }
+
+    func testMiniPlayerDismissed() {
+        playerService.showMiniPlayer = true
+        playerService.miniPlayerDismissed()
+
+        XCTAssertFalse(playerService.showMiniPlayer)
+    }
 }

@@ -525,11 +525,35 @@ final class PlayerService: NSObject {
         }
     }
 
+    /// Updates track metadata when track changes (e.g., via next/previous).
+    func updateTrackMetadata(title: String, artist: String, thumbnailUrl: String) {
+        logger.debug("Track metadata updated: \(title) - \(artist)")
+
+        let thumbnailURL = URL(string: thumbnailUrl)
+        let artistObj = Artist(id: "unknown", name: artist)
+
+        // Preserve videoId if we have it
+        let videoId = currentTrack?.videoId ?? pendingPlayVideoId ?? "unknown"
+
+        currentTrack = Song(
+            id: videoId,
+            title: title,
+            artists: [artistObj],
+            album: nil,
+            duration: duration > 0 ? duration : nil,
+            thumbnailURL: thumbnailURL,
+            videoId: videoId
+        )
+    }
+
     /// Toggles play/pause.
     func playPause() async {
         logger.debug("Toggle play/pause")
 
-        if isPlaying {
+        // Use singleton WebView if we have a pending video
+        if pendingPlayVideoId != nil {
+            SingletonPlayerWebView.shared.playPause()
+        } else if isPlaying {
             await pause()
         } else {
             await resume()
@@ -539,20 +563,29 @@ final class PlayerService: NSObject {
     /// Pauses playback.
     func pause() async {
         logger.debug("Pausing playback")
-        await evaluatePlayerCommand("pause")
+        if pendingPlayVideoId != nil {
+            SingletonPlayerWebView.shared.pause()
+        } else {
+            await evaluatePlayerCommand("pause")
+        }
     }
 
     /// Resumes playback.
     func resume() async {
         logger.debug("Resuming playback")
-        await evaluatePlayerCommand("play")
+        if pendingPlayVideoId != nil {
+            SingletonPlayerWebView.shared.play()
+        } else {
+            await evaluatePlayerCommand("play")
+        }
     }
 
     /// Skips to next track.
     func next() async {
         logger.debug("Skipping to next track")
-        // IFrame API doesn't have next/previous - we'll need to manage queue ourselves
-        if currentIndex < queue.count - 1 {
+        if pendingPlayVideoId != nil {
+            SingletonPlayerWebView.shared.next()
+        } else if currentIndex < queue.count - 1 {
             currentIndex += 1
             if let nextSong = queue[safe: currentIndex] {
                 await play(song: nextSong)
@@ -563,8 +596,14 @@ final class PlayerService: NSObject {
     /// Goes to previous track.
     func previous() async {
         logger.debug("Going to previous track")
-        // If more than 3 seconds in, restart. Otherwise go to previous.
-        if progress > 3 {
+        if pendingPlayVideoId != nil {
+            // If more than 3 seconds in, restart. Otherwise go to previous.
+            if progress > 3 {
+                SingletonPlayerWebView.shared.seek(to: 0)
+            } else {
+                SingletonPlayerWebView.shared.previous()
+            }
+        } else if progress > 3 {
             await seek(to: 0)
         } else if currentIndex > 0 {
             currentIndex -= 1
@@ -579,7 +618,12 @@ final class PlayerService: NSObject {
     /// Seeks to a specific time.
     func seek(to time: TimeInterval) async {
         logger.debug("Seeking to \(time)")
-        await evaluatePlayerCommand("seekTo(\(time), true)")
+        if pendingPlayVideoId != nil {
+            SingletonPlayerWebView.shared.seek(to: time)
+            progress = time
+        } else {
+            await evaluatePlayerCommand("seekTo(\(time), true)")
+        }
     }
 
     /// Sets the volume.
@@ -587,7 +631,11 @@ final class PlayerService: NSObject {
         let clampedValue = max(0, min(1, value))
         logger.debug("Setting volume to \(clampedValue)")
         volume = clampedValue
-        await evaluatePlayerCommand("setVolume(\(Int(clampedValue * 100)))")
+        if pendingPlayVideoId != nil {
+            SingletonPlayerWebView.shared.setVolume(clampedValue)
+        } else {
+            await evaluatePlayerCommand("setVolume(\(Int(clampedValue * 100)))")
+        }
     }
 
     /// Stops playback and clears state.

@@ -1,6 +1,8 @@
 import SwiftUI
 import WebKit
 
+// MARK: - MiniPlayerWebView
+
 /// A visible WebView that displays the YouTube Music player.
 /// This is required because YouTube Music won't initialize the video player
 /// without user interaction - autoplay is blocked in hidden WebViews.
@@ -240,7 +242,7 @@ struct MiniPlayerWebView: NSViewRepresentable {
     }
 }
 
-// MARK: - Persistent Player WebView
+// MARK: - PersistentPlayerWebView
 
 /// A WebView that stays in the view hierarchy to keep audio playing.
 /// This is hidden (1x1 pixel, opacity 0) but remains active.
@@ -282,7 +284,7 @@ struct PersistentPlayerWebView: NSViewRepresentable {
         return webView
     }
 
-    func updateNSView(_ webView: WKWebView, context: Context) {
+    func updateNSView(_ webView: WKWebView, context _: Context) {
         // Check if we need to load a new video
         if let currentURL = webView.url,
            !currentURL.absoluteString.contains(videoId)
@@ -357,7 +359,7 @@ struct PersistentPlayerWebView: NSViewRepresentable {
             self.playerService = playerService
         }
 
-        func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
+        func userContentController(_: WKUserContentController, didReceive message: WKScriptMessage) {
             guard let body = message.body as? [String: Any],
                   let type = body["type"] as? String,
                   type == "STATE_UPDATE"
@@ -378,7 +380,7 @@ struct PersistentPlayerWebView: NSViewRepresentable {
     }
 }
 
-// MARK: - Compact Play Toast
+// MARK: - CompactPlayToast
 
 /// A very small, unobtrusive toast that appears to let the user start playback.
 /// YouTube Music requires a user gesture, so we show this minimal popup.
@@ -400,7 +402,8 @@ struct CompactPlayToast: View {
                         if !playbackStarted {
                             playbackStarted = true
                             // Transfer WebView to AppDelegate and dismiss
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                            Task { @MainActor in
+                                try? await Task.sleep(for: .milliseconds(500))
                                 playerService.confirmPlaybackStarted()
                             }
                         }
@@ -429,7 +432,7 @@ struct CompactPlayToast: View {
     }
 }
 
-// MARK: - AppDelegate WebView Wrapper
+// MARK: - AppDelegateWebViewWrapper
 
 /// Wraps the AppDelegate's persistent WebView for display in SwiftUI.
 /// Used in the toast popup to show the WebView for user interaction.
@@ -438,7 +441,7 @@ struct AppDelegateWebViewWrapper: NSViewRepresentable {
     let playerService: PlayerService
     let webKitManager: WebKitManager
 
-    func makeNSView(context: Context) -> NSView {
+    func makeNSView(context _: Context) -> NSView {
         let container = NSView()
 
         // Get the WebView from AppDelegate (should already exist from PersistentWebViewContainer)
@@ -455,14 +458,14 @@ struct AppDelegateWebViewWrapper: NSViewRepresentable {
         return container
     }
 
-    func updateNSView(_ nsView: NSView, context: Context) {
+    func updateNSView(_ nsView: NSView, context _: Context) {
         // Update WebView frame if needed
         if let webView = nsView.subviews.first {
             webView.frame = nsView.bounds
         }
     }
 
-    static func dismantleNSView(_ nsView: NSView, coordinator: ()) {
+    static func dismantleNSView(_: NSView, coordinator _: ()) {
         // When this view is removed, move the WebView back to the persistent container
         if let appDelegate = NSApplication.shared.delegate as? AppDelegate,
            let webView = appDelegate.webView
@@ -473,7 +476,7 @@ struct AppDelegateWebViewWrapper: NSViewRepresentable {
     }
 }
 
-// MARK: - Persistent WebView Container
+// MARK: - PersistentWebViewContainer
 
 /// A hidden container that keeps the AppDelegate's WebView in the view hierarchy.
 /// The WebView must stay in a window's view hierarchy for audio playback to work.
@@ -495,11 +498,11 @@ struct PersistentWebViewContainer: NSViewRepresentable {
         return container
     }
 
-    func updateNSView(_ nsView: NSView, context: Context) {
+    func updateNSView(_ nsView: NSView, context _: Context) {
         reclaimWebViewIfNeeded(into: nsView)
     }
 
-    static func dismantleNSView(_ nsView: NSView, coordinator: Coordinator) {
+    static func dismantleNSView(_: NSView, coordinator: Coordinator) {
         coordinator.stopTimer()
     }
 
@@ -546,7 +549,7 @@ struct PersistentWebViewContainer: NSViewRepresentable {
     }
 }
 
-// MARK: - Singleton WebView Manager
+// MARK: - SingletonPlayerWebView
 
 /// Manages a single WebView instance for the entire app lifetime.
 /// This ensures there's only ever ONE WebView playing audio.
@@ -602,7 +605,7 @@ final class SingletonPlayerWebView {
 
     /// Load a video, stopping any currently playing audio first.
     func loadVideo(videoId: String) {
-        guard let webView = webView else {
+        guard let webView else {
             logger.error("loadVideo called but webView is nil")
             return
         }
@@ -625,12 +628,145 @@ final class SingletonPlayerWebView {
         }
     }
 
+    // MARK: - Playback Controls
+
+    /// Toggle play/pause.
+    func playPause() {
+        guard let webView else { return }
+        logger.debug("playPause() called")
+
+        let script = """
+            (function() {
+                const playBtn = document.querySelector('.play-pause-button.ytmusic-player-bar');
+                if (playBtn) { playBtn.click(); return 'clicked'; }
+                const video = document.querySelector('video');
+                if (video) {
+                    if (video.paused) { video.play(); return 'played'; }
+                    else { video.pause(); return 'paused'; }
+                }
+                return 'no-element';
+            })();
+        """
+        webView.evaluateJavaScript(script) { [weak self] result, error in
+            if let error {
+                self?.logger.error("playPause error: \(error.localizedDescription)")
+            } else {
+                self?.logger.debug("playPause result: \(String(describing: result))")
+            }
+        }
+    }
+
+    /// Play (resume).
+    func play() {
+        guard let webView else { return }
+        logger.debug("play() called")
+
+        let script = """
+            (function() {
+                const video = document.querySelector('video');
+                if (video && video.paused) { video.play(); return 'played'; }
+                return 'already-playing';
+            })();
+        """
+        webView.evaluateJavaScript(script, completionHandler: nil)
+    }
+
+    /// Pause.
+    func pause() {
+        guard let webView else { return }
+        logger.debug("pause() called")
+
+        let script = """
+            (function() {
+                const video = document.querySelector('video');
+                if (video && !video.paused) { video.pause(); return 'paused'; }
+                return 'already-paused';
+            })();
+        """
+        webView.evaluateJavaScript(script, completionHandler: nil)
+    }
+
+    /// Skip to next track.
+    func next() {
+        guard let webView else { return }
+        logger.debug("next() called")
+
+        let script = """
+            (function() {
+                const nextBtn = document.querySelector('.next-button.ytmusic-player-bar');
+                if (nextBtn) { nextBtn.click(); return 'clicked'; }
+                return 'no-button';
+            })();
+        """
+        webView.evaluateJavaScript(script) { [weak self] result, error in
+            if let error {
+                self?.logger.error("next error: \(error.localizedDescription)")
+            } else {
+                self?.logger.debug("next result: \(String(describing: result))")
+            }
+        }
+    }
+
+    /// Go to previous track.
+    func previous() {
+        guard let webView else { return }
+        logger.debug("previous() called")
+
+        let script = """
+            (function() {
+                const prevBtn = document.querySelector('.previous-button.ytmusic-player-bar');
+                if (prevBtn) { prevBtn.click(); return 'clicked'; }
+                return 'no-button';
+            })();
+        """
+        webView.evaluateJavaScript(script) { [weak self] result, error in
+            if let error {
+                self?.logger.error("previous error: \(error.localizedDescription)")
+            } else {
+                self?.logger.debug("previous result: \(String(describing: result))")
+            }
+        }
+    }
+
+    /// Seek to a specific time in seconds.
+    func seek(to time: Double) {
+        guard let webView else { return }
+        logger.debug("seek(to: \(time)) called")
+
+        let script = """
+            (function() {
+                const video = document.querySelector('video');
+                if (video) { video.currentTime = \(time); return 'seeked'; }
+                return 'no-video';
+            })();
+        """
+        webView.evaluateJavaScript(script, completionHandler: nil)
+    }
+
+    /// Set volume (0.0 - 1.0).
+    func setVolume(_ volume: Double) {
+        guard let webView else { return }
+        let clampedVolume = max(0, min(1, volume))
+        logger.debug("setVolume(\(clampedVolume)) called")
+
+        let script = """
+            (function() {
+                const video = document.querySelector('video');
+                if (video) { video.volume = \(clampedVolume); return 'set'; }
+                return 'no-video';
+            })();
+        """
+        webView.evaluateJavaScript(script, completionHandler: nil)
+    }
+
     // Observer script for playback state
     private static var observerScript: String {
         """
         (function() {
             'use strict';
             const bridge = window.webkit.messageHandlers.singletonPlayer;
+            let lastTitle = '';
+            let lastArtist = '';
 
             function waitForPlayerBar() {
                 const playerBar = document.querySelector('ytmusic-player-bar');
@@ -660,11 +796,36 @@ final class SingletonPlayerWebView {
 
                     const progressBar = document.querySelector('#progress-bar');
 
+                    // Extract track metadata
+                    const titleEl = document.querySelector('.ytmusic-player-bar.title');
+                    const artistEl = document.querySelector('.ytmusic-player-bar.byline');
+                    const thumbEl = document.querySelector('.ytmusic-player-bar .thumbnail img, ytmusic-player-bar .image');
+
+                    const title = titleEl ? titleEl.textContent.trim() : '';
+                    const artist = artistEl ? artistEl.textContent.trim() : '';
+                    let thumbnailUrl = '';
+
+                    // Get the thumbnail URL from the image element
+                    if (thumbEl) {
+                        thumbnailUrl = thumbEl.src || thumbEl.getAttribute('src') || '';
+                    }
+
+                    // Check if track changed
+                    const trackChanged = (title !== lastTitle || artist !== lastArtist) && title !== '';
+                    if (trackChanged) {
+                        lastTitle = title;
+                        lastArtist = artist;
+                    }
+
                     bridge.postMessage({
                         type: 'STATE_UPDATE',
                         isPlaying: isPlaying,
                         progress: progressBar ? parseInt(progressBar.getAttribute('value') || '0') : 0,
-                        duration: progressBar ? parseInt(progressBar.getAttribute('aria-valuemax') || '0') : 0
+                        duration: progressBar ? parseInt(progressBar.getAttribute('aria-valuemax') || '0') : 0,
+                        title: title,
+                        artist: artist,
+                        thumbnailUrl: thumbnailUrl,
+                        trackChanged: trackChanged
                     });
                 } catch (e) {}
             }
@@ -696,6 +857,10 @@ final class SingletonPlayerWebView {
             let isPlaying = body["isPlaying"] as? Bool ?? false
             let progress = body["progress"] as? Int ?? 0
             let duration = body["duration"] as? Int ?? 0
+            let title = body["title"] as? String ?? ""
+            let artist = body["artist"] as? String ?? ""
+            let thumbnailUrl = body["thumbnailUrl"] as? String ?? ""
+            let trackChanged = body["trackChanged"] as? Bool ?? false
 
             Task { @MainActor in
                 self.playerService.updatePlaybackState(
@@ -703,6 +868,15 @@ final class SingletonPlayerWebView {
                     progress: Double(progress),
                     duration: Double(duration)
                 )
+
+                // Update track metadata if track changed
+                if trackChanged, !title.isEmpty {
+                    self.playerService.updateTrackMetadata(
+                        title: title,
+                        artist: artist,
+                        thumbnailUrl: thumbnailUrl
+                    )
+                }
             }
         }
 
@@ -712,7 +886,7 @@ final class SingletonPlayerWebView {
     }
 }
 
-// MARK: - Persistent Player View
+// MARK: - PersistentPlayerView
 
 /// A SwiftUI view that displays the singleton WebView.
 /// The WebView is created once and reused for all playback.
@@ -725,7 +899,7 @@ struct PersistentPlayerView: NSViewRepresentable {
 
     private let logger = DiagnosticsLogger.player
 
-    func makeNSView(context: Context) -> NSView {
+    func makeNSView(context _: Context) -> NSView {
         logger.info("PersistentPlayerView.makeNSView for videoId: \(videoId)")
 
         let container = NSView(frame: .zero)
@@ -754,7 +928,7 @@ struct PersistentPlayerView: NSViewRepresentable {
         return container
     }
 
-    func updateNSView(_ container: NSView, context: Context) {
+    func updateNSView(_ container: NSView, context _: Context) {
         logger.info("PersistentPlayerView.updateNSView for videoId: \(videoId)")
 
         // Ensure WebView is in this container
@@ -778,7 +952,7 @@ struct PersistentPlayerView: NSViewRepresentable {
     }
 }
 
-// MARK: - Mini Player Popup
+// MARK: - MiniPlayerPopup
 
 /// A small popup overlay prompting user to click play.
 struct MiniPlayerPopup: View {
@@ -806,6 +980,7 @@ struct MiniPlayerPopup: View {
                         .foregroundStyle(.secondary)
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("Dismiss")
             }
 
             // Visible mini WebView for user interaction
@@ -816,7 +991,8 @@ struct MiniPlayerPopup: View {
                         if !playbackDetected {
                             playbackDetected = true
                             // Auto-dismiss after playback starts
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                            Task { @MainActor in
+                                try? await Task.sleep(for: .seconds(1))
                                 playerService.confirmPlaybackStarted()
                             }
                         }
@@ -837,7 +1013,7 @@ struct MiniPlayerPopup: View {
     }
 }
 
-// MARK: - Mini Player Sheet View (Legacy - kept for reference)
+// MARK: - MiniPlayerSheet
 
 /// A compact sheet that shows the YouTube Music player for a specific video.
 /// Auto-dismisses once playback starts.
@@ -886,7 +1062,8 @@ struct MiniPlayerSheet: View {
                         if !playbackStarted {
                             playbackStarted = true
                             // Auto-dismiss after a short delay once playing
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                            Task { @MainActor in
+                                try? await Task.sleep(for: .milliseconds(1500))
                                 playerService.confirmPlaybackStarted()
                                 dismiss()
                             }

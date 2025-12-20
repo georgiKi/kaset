@@ -11,14 +11,15 @@ You are a Senior Swift Engineer specializing in SwiftUI, Swift Concurrency, and 
 A native **macOS** YouTube Music client built with **Swift** and **SwiftUI**.
 
 - **Browser-cookie authentication**: Auto-extracts cookies from an in-app login WebView
-- **Hidden WebView playback**: Supports YouTube Music Premium (DRM content)
+- **Hidden WebView playback**: Singleton WebView for YouTube Music Premium (DRM content)
+- **Background audio**: Audio continues when window is closed, stops on quit
 - **Native UI**: SwiftUI sidebar navigation, player bar, and content views
 - **System integration**: Now Playing in Control Center, media keys, Dock menu
 
 ## Project Structure
 
 ```
-App/                → App entry point (YouTubeMusicApp.swift)
+App/                → App entry point, AppDelegate (window lifecycle)
 Core/
   ├── Models/       → Data models (Song, Playlist, Album, Artist, etc.)
   ├── Services/
@@ -31,139 +32,83 @@ Core/
 Views/
   └── macOS/        → SwiftUI views (MainWindow, Sidebar, PlayerBar, etc.)
 Tests/              → Unit tests (YouTubeMusicTests/)
+docs/               → Detailed documentation
 ```
 
-## Before You Start: Read the Plan
+## Documentation
 
-**Always consult [PLAN.md](PLAN.md) before making changes.** It contains the phased implementation plan with exit criteria and architecture decisions.
+For detailed information, see the `docs/` folder:
 
-## Task Planning: Phases with Exit Criteria
+- **[docs/architecture.md](docs/architecture.md)** — Services, state management, data flow
+- **[docs/playback.md](docs/playback.md)** — WebView playback system, background audio
+- **[docs/testing.md](docs/testing.md)** — Test commands, patterns, debugging
 
-For any non-trivial task, **plan in phases with testable exit criteria** before writing code.
+## Before You Start
 
-### Phase Structure
+1. **Read [PLAN.md](PLAN.md)** — Contains the phased implementation plan
+2. **Understand the playback architecture** — See [docs/playback.md](docs/playback.md)
 
-Every task should be broken into phases. Each phase must have:
-1. **Clear deliverable** — What artifact or change is produced
-2. **Testable exit criteria** — How to verify the phase is complete
-3. **Rollback point** — The phase should leave the codebase in a working state
-
-### Standard Phases
-
-#### Phase 1: Research & Understanding
-| Deliverable | Exit Criteria |
-|-------------|---------------|
-| Identify affected files and dependencies | List all files to modify/create |
-| Understand existing patterns | Can explain how similar features work |
-| Read PLAN.md | Confirmed approach aligns with architecture |
-
-**Exit gate**: Can articulate the implementation plan without ambiguity.
-
-#### Phase 2: Interface Design
-| Deliverable | Exit Criteria |
-|-------------|---------------|
-| Define new types/protocols | Type signatures compile |
-| Plan public API surface | No breaking changes to existing callers |
-
-**Exit gate**: `xcodebuild build` succeeds with stub implementations.
-
-#### Phase 3: Core Implementation
-| Deliverable | Exit Criteria |
-|-------------|---------------|
-| Implement business logic | Unit tests pass for new code |
-| Handle error cases | Error paths have test coverage |
-| Add logging | `DiagnosticsLogger` calls in place |
-
-**Exit gate**: `xcodebuild test -only-testing:YouTubeMusicTests` passes.
-
-#### Phase 4: Quality Assurance
-| Deliverable | Exit Criteria |
-|-------------|---------------|
-| Linting passes | `swiftlint --strict` reports 0 errors |
-| Formatting applied | `swiftformat .` makes no changes |
-| Full test suite passes | `xcodebuild test` succeeds |
-
-**Exit gate**: CI-equivalent checks pass locally.
-
-### Checkpoint Communication
-
-After each phase, briefly report:
-- ✅ What was completed
-- 🧪 Test/verification results
-- ➡️ Next phase plan
-
-## Critical Rules (Apply to EVERY Task)
+## Critical Rules
 
 > ⚠️ **NEVER run `git commit` or `git push`** — Always leave committing and pushing to the human.
 
-1. **macOS Only**: This is a macOS-only app. No `#if os()` guards needed unless adding iOS/watchOS in the future.
+### Build & Verify
 
-2. **Verify Builds**: After modifying code, verify the build:
-   ```bash
-   xcodebuild -scheme YouTubeMusic -destination 'platform=macOS' build
-   ```
+After modifying code, verify the build:
 
-3. **Linting**: Run after non-trivial changes:
-   ```bash
-   swiftlint --strict && swiftformat .
-   ```
+```bash
+xcodebuild -scheme YouTubeMusic -destination 'platform=macOS' build
+```
 
-4. **Unit Tests Required**: New code in `Core/` must include tests in `Tests/YouTubeMusicTests/`.
+### Code Quality
 
-5. **Use Modern SwiftUI APIs**:
-   - `.foregroundStyle()` not `.foregroundColor()`
-   - `.clipShape(.rect(cornerRadius:))` not `.cornerRadius()`
-   - `onChange(of:) { _, newValue in }` (two-param closure)
-   - `Task.sleep(for: .seconds())` not `Task.sleep(nanoseconds:)`
-   - `NavigationSplitView` or `NavigationStack` not `NavigationView`
-   - `Button` not `onTapGesture()` (unless tap location needed)
-   - Avoid `AnyView` — use concrete types or `@ViewBuilder`
-   - Add `.accessibilityLabel()` to image-only buttons
+```bash
+swiftlint --strict && swiftformat .
+```
 
-6. **No Third-Party Frameworks**: Do not introduce third-party dependencies without asking first. This app uses only Apple frameworks.
+### Modern SwiftUI APIs
 
-7. **Swift Concurrency**: Always mark `@Observable` classes with `@MainActor`. Never use `DispatchQueue` — use Swift concurrency (`async`/`await`, `MainActor`).
-
-8. **XCTest with @MainActor**: For `@MainActor` test classes, use `async` setUp/tearDown **without** calling `super`:
-   ```swift
-   @MainActor
-   final class MyServiceTests: XCTestCase {
-       override func setUp() async throws {
-           // Do NOT call: try await super.setUp()
-           // Set up test fixtures here
-       }
-       
-       override func tearDown() async throws {
-           // Clean up here
-           // Do NOT call: try await super.tearDown()
-       }
-   }
-   ```
-   **Why?** `XCTestCase` is not `Sendable`. Calling `super.setUp()` from a `@MainActor` async context sends `self` across actor boundaries, causing Swift 6 strict concurrency errors.
-
-9. **WebKit Patterns**: 
-   - Always use `WebKitManager`'s shared `WKWebsiteDataStore` for cookie persistence
-   - Use `WKHTTPCookieStoreObserver` for cookie change notifications, not polling
-   - Compute `SAPISIDHASH` fresh per request using current cookies
-
-10. **Error Handling**:
-    - Throw `YTMusicError.authExpired` on HTTP 401/403
-    - Use `DiagnosticsLogger` for all logging (not `print()`)
-    - Show user-friendly error messages with retry options
-
-## Quick Style Rules
-
-| ❌ Avoid | ✅ Prefer |
-|----------|-----------|
-| `DispatchQueue.main.async` | `await MainActor.run {}` or `@MainActor` |
+| ❌ Avoid | ✅ Use |
+|----------|--------|
+| `.foregroundColor()` | `.foregroundStyle()` |
+| `.cornerRadius()` | `.clipShape(.rect(cornerRadius:))` |
+| `onChange(of:) { newValue in }` | `onChange(of:) { _, newValue in }` |
+| `Task.sleep(nanoseconds:)` | `Task.sleep(for: .seconds())` |
 | `NavigationView` | `NavigationSplitView` or `NavigationStack` |
 | `onTapGesture()` | `Button` (unless tap location needed) |
 | `AnyView` | Concrete types or `@ViewBuilder` |
 | `print()` | `DiagnosticsLogger` |
-| Force unwraps (`!`) | Optional handling or `guard` |
-| `super.setUp()` in `@MainActor` tests | Omit super calls in async setUp/tearDown |
-| Polling cookies | `WKHTTPCookieStoreObserver` |
-| Hardcoded DOM selectors | Centralized JS constants file |
+| `DispatchQueue` | Swift concurrency (`async`/`await`) |
+
+### Swift Concurrency
+
+- Mark `@Observable` classes with `@MainActor`
+- Never use `DispatchQueue` — use `async`/`await`, `MainActor`
+- For `@MainActor` test classes, don't call `super.setUp()` in async context
+
+### WebKit Patterns
+
+- Use `WebKitManager`'s shared `WKWebsiteDataStore` for cookie persistence
+- Use `SingletonPlayerWebView.shared` for playback (never create multiple WebViews)
+- Compute `SAPISIDHASH` fresh per request using current cookies
+
+### Error Handling
+
+- Throw `YTMusicError.authExpired` on HTTP 401/403
+- Use `DiagnosticsLogger` for all logging (not `print()`)
+- Show user-friendly error messages with retry options
+
+## Key Files
+
+| File | Purpose |
+|------|---------|
+| `App/AppDelegate.swift` | Window lifecycle, background audio support |
+| `Core/Services/WebKit/WebKitManager.swift` | Cookie store & persistence |
+| `Core/Services/Auth/AuthService.swift` | Login state machine |
+| `Core/Services/Player/PlayerService.swift` | Playback state & control |
+| `Views/macOS/MiniPlayerWebView.swift` | Singleton WebView, playback UI |
+| `Views/macOS/MainWindow.swift` | Main app window |
+| `Core/Utilities/DiagnosticsLogger.swift` | Logging |
 
 ## Quick Reference
 
@@ -180,98 +125,63 @@ xcodebuild -scheme YouTubeMusic -destination 'platform=macOS' test
 swiftlint --strict && swiftformat .
 ```
 
-### Key Files
-
-- `Core/Services/WebKit/WebKitManager.swift` — Cookie store & persistence
-- `Core/Services/Auth/AuthService.swift` — Login state machine
-- `Core/Services/API/YTMusicClient.swift` — YouTube Music API client
-- `Core/Services/Player/PlayerService.swift` — Playback control via hidden WebView
-- `Core/Services/Player/NowPlayingManager.swift` — System media integration
-- `Core/Utilities/DiagnosticsLogger.swift` — Logging (use this for all logs)
-- `Core/Models/YTMusicError.swift` — Unified error types
-
-### Authentication Flow
-
-```
-App Launch
-    │
-    ▼
-┌─────────────────┐
-│ Check cookies   │──── __Secure-3PAPISID exists? ────┐
-│ in WebKitManager│                                    │
-└─────────────────┘                                    │
-    │ No                                               │ Yes
-    ▼                                                  ▼
-┌─────────────────┐                          ┌─────────────────┐
-│ Show LoginSheet │                          │ AuthService     │
-│ (WKWebView)     │                          │ .loggedIn       │
-└─────────────────┘                          └─────────────────┘
-    │
-    │ User signs in → cookies set
-    │
-    ▼
-┌─────────────────┐
-│ Observer fires  │
-│ cookiesDidChange│
-└─────────────────┘
-    │
-    ▼
-┌─────────────────┐
-│ Extract SAPISID │
-│ Dismiss sheet   │
-└─────────────────┘
-```
-
-### API Request Flow
-
-```
-YTMusicClient.getHome()
-    │
-    ▼
-┌─────────────────────────────────────────────────┐
-│ buildAuthHeaders()                              │
-│  1. Get cookies from WebKitManager              │
-│  2. Extract __Secure-3PAPISID                   │
-│  3. Compute SAPISIDHASH = ts_SHA1(ts+sapi+origin)│
-│  4. Build Cookie, Authorization, Origin headers │
-└─────────────────────────────────────────────────┘
-    │
-    ▼
-┌─────────────────────────────────────────────────┐
-│ POST https://music.youtube.com/youtubei/v1/browse│
-│ Body: { context: { client: WEB_REMIX }, ... }   │
-└─────────────────────────────────────────────────┘
-    │
-    ├── 200 OK → Parse JSON → Return HomeResponse
-    │
-    └── 401/403 → Throw YTMusicError.authExpired
-                  → AuthService.sessionExpired()
-                  → Show LoginSheet
-```
-
-### Playback Flow
+### Playback Architecture
 
 ```
 User clicks Play
     │
     ▼
-┌─────────────────────────────────────────────────┐
-│ PlayerService.play(videoId:)                    │
-│  → evaluateJavaScript in hidden WKWebView       │
-│  → playerApi.loadVideoById(videoId)             │
-└─────────────────────────────────────────────────┘
+PlayerService.play(videoId:)
     │
-    ▼
-┌─────────────────────────────────────────────────┐
-│ WKWebView plays audio (DRM handled by WebKit)   │
-│  → JS bridge sends state updates                │
-│  → PlayerService updates @Observable properties │
-└─────────────────────────────────────────────────┘
-    │
-    ▼
-┌─────────────────────────────────────────────────┐
-│ NowPlayingManager observes PlayerService        │
-│  → Updates MPNowPlayingInfoCenter               │
-│  → Registers MPRemoteCommandCenter handlers     │
-└─────────────────────────────────────────────────┘
+    ├── Sets pendingPlayVideoId
+    └── Shows mini player toast (160×90)
+            │
+            ▼
+    SingletonPlayerWebView.shared
+            │
+            ├── One WebView for entire app
+            ├── Loads music.youtube.com/watch?v={id}
+            └── JS bridge sends state updates
+                    │
+                    ▼
+            PlayerService updates:
+            - isPlaying
+            - progress
+            - duration
 ```
+
+### Background Audio
+
+```
+Close window (⌘W) → Window hides → Audio continues
+Click dock icon    → Window shows → Same WebView
+Quit app (⌘Q)     → App terminates → Audio stops
+```
+
+### Authentication
+
+```
+App Launch → Check cookies → __Secure-3PAPISID exists?
+    │                              │
+    │ No                           │ Yes
+    ▼                              ▼
+Show LoginSheet              AuthService.loggedIn
+    │
+    │ User signs in
+    ▼
+Observer detects cookie → Dismiss sheet
+```
+
+## Task Planning
+
+For non-trivial tasks, plan in phases:
+
+1. **Research**: Identify affected files, read docs
+2. **Interface**: Define types/protocols, verify build
+3. **Implementation**: Write code, add tests
+4. **Quality**: Lint, format, test
+
+After each phase, report:
+- ✅ What was completed
+- 🧪 Test/verification results
+- ➡️ Next phase plan

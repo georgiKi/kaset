@@ -132,59 +132,49 @@ struct PlaylistDetailView: View {
     private func tracksView(_ tracks: [Song]) -> some View {
         VStack(spacing: 0) {
             ForEach(Array(tracks.enumerated()), id: \.element.id) { index, track in
-                trackRow(track, index: index + 1)
+                trackRow(track, index: index, tracks: tracks)
 
                 if index < tracks.count - 1 {
                     Divider()
-                        .padding(.leading, 56)
+                        .padding(.leading, 44)
                 }
             }
         }
     }
 
-    private func trackRow(_ track: Song, index: Int) -> some View {
+    private func trackRow(_ track: Song, index: Int, tracks: [Song]) -> some View {
         Button {
-            playTrack(track)
+            playTrackInQueue(tracks: tracks, startingAt: index)
         } label: {
             HStack(spacing: 12) {
-                // Index
-                Text("\(index)")
-                    .font(.system(size: 12, design: .monospaced))
+                // Index - use monospaced digits for alignment (display is 1-based)
+                Text("\(index + 1)")
+                    .font(.system(size: 14, design: .monospaced))
                     .foregroundStyle(.secondary)
-                    .frame(width: 24, alignment: .trailing)
-
-                // Thumbnail
-                AsyncImage(url: track.thumbnailURL) { image in
-                    image
-                        .resizable()
-                        .aspectRatio(contentMode: .fill)
-                } placeholder: {
-                    Rectangle()
-                        .fill(.quaternary)
-                }
-                .frame(width: 40, height: 40)
-                .clipShape(.rect(cornerRadius: 4))
+                    .frame(width: 28, alignment: .trailing)
 
                 // Title and artist
                 VStack(alignment: .leading, spacing: 2) {
                     Text(track.title)
-                        .font(.system(size: 13))
+                        .font(.system(size: 14))
+                        .foregroundStyle(.primary)
                         .lineLimit(1)
 
                     Text(track.artistsDisplay)
-                        .font(.system(size: 11))
+                        .font(.system(size: 12))
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                 }
-
-                Spacer()
+                .frame(maxWidth: .infinity, alignment: .leading)
 
                 // Duration
                 Text(track.durationDisplay)
                     .font(.system(size: 12, design: .monospaced))
                     .foregroundStyle(.secondary)
+                    .frame(width: 45, alignment: .trailing)
             }
             .padding(.vertical, 8)
+            .padding(.horizontal, 4)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -215,9 +205,9 @@ struct PlaylistDetailView: View {
 
     // MARK: - Actions
 
-    private func playTrack(_ track: Song) {
+    private func playTrackInQueue(tracks: [Song], startingAt index: Int) {
         Task {
-            await playerService.play(song: track)
+            await playerService.playQueue(tracks, startingAt: index)
         }
     }
 

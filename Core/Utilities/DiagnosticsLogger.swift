@@ -4,17 +4,17 @@ import os
 /// Centralized logging for the Kaset app.
 enum DiagnosticsLogger {
     /// Logger for authentication-related events.
-    static let auth = Logger(subsystem: "com.example.Kaset", category: "Auth")
+    static let auth = Logger(subsystem: "com.sertacozercan.Kaset", category: "Auth")
 
     /// Logger for API-related events.
-    static let api = Logger(subsystem: "com.example.Kaset", category: "API")
+    static let api = Logger(subsystem: "com.sertacozercan.Kaset", category: "API")
 
     /// Logger for WebKit-related events.
-    static let webKit = Logger(subsystem: "com.example.Kaset", category: "WebKit")
+    static let webKit = Logger(subsystem: "com.sertacozercan.Kaset", category: "WebKit")
 
     /// Logger for player-related events.
-    static let player = Logger(subsystem: "com.example.Kaset", category: "Player")
+    static let player = Logger(subsystem: "com.sertacozercan.Kaset", category: "Player")
 
     /// Logger for UI-related events.
-    static let ui = Logger(subsystem: "com.example.Kaset", category: "UI")
+    static let ui = Logger(subsystem: "com.sertacozercan.Kaset", category: "UI")
 }

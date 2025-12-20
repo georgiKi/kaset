@@ -7,6 +7,16 @@ struct HomeSection: Identifiable, Sendable {
     let id: String
     let title: String
     let items: [HomeSectionItem]
+    /// Whether this section is a chart (e.g., "Top 100", "Trending", "Charts").
+    /// Chart sections are rendered as vertical numbered lists instead of horizontal carousels.
+    let isChart: Bool
+
+    init(id: String, title: String, items: [HomeSectionItem], isChart: Bool = false) {
+        self.id = id
+        self.title = title
+        self.items = items
+        self.isChart = isChart
+    }
 }
 
 // MARK: - HomeSectionItem

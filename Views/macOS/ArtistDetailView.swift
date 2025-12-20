@@ -139,53 +139,50 @@ struct ArtistDetailView: View {
 
             VStack(spacing: 0) {
                 ForEach(Array(songs.enumerated()), id: \.element.id) { index, song in
-                    songRow(song, index: index + 1)
+                    songRow(song, index: index, songs: songs)
 
                     if index < songs.count - 1 {
                         Divider()
-                            .padding(.leading, 56)
+                            .padding(.leading, 44)
                     }
                 }
             }
         }
     }
 
-    private func songRow(_ song: Song, index: Int) -> some View {
+    private func songRow(_ song: Song, index: Int, songs: [Song]) -> some View {
         Button {
-            playSong(song)
+            playSongInQueue(songs: songs, startingAt: index)
         } label: {
             HStack(spacing: 12) {
-                // Index
-                Text("\(index)")
-                    .font(.system(size: 12, design: .monospaced))
+                // Index - use monospaced digits for alignment (display is 1-based)
+                Text("\(index + 1)")
+                    .font(.system(size: 14, design: .monospaced))
                     .foregroundStyle(.secondary)
-                    .frame(width: 24, alignment: .trailing)
+                    .frame(width: 28, alignment: .trailing)
 
-                // Thumbnail
-                AsyncImage(url: song.thumbnailURL) { image in
-                    image
-                        .resizable()
-                        .aspectRatio(contentMode: .fill)
-                } placeholder: {
-                    Rectangle()
-                        .fill(.quaternary)
+                // Title and artist
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(song.title)
+                        .font(.system(size: 14))
+                        .foregroundStyle(.primary)
+                        .lineLimit(1)
+
+                    Text(song.artistsDisplay)
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
                 }
-                .frame(width: 40, height: 40)
-                .clipShape(.rect(cornerRadius: 4))
-
-                // Title
-                Text(song.title)
-                    .font(.system(size: 13))
-                    .lineLimit(1)
-
-                Spacer()
+                .frame(maxWidth: .infinity, alignment: .leading)
 
                 // Duration
                 Text(song.durationDisplay)
                     .font(.system(size: 12, design: .monospaced))
                     .foregroundStyle(.secondary)
+                    .frame(width: 45, alignment: .trailing)
             }
             .padding(.vertical, 8)
+            .padding(.horizontal, 4)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -282,9 +279,9 @@ struct ArtistDetailView: View {
 
     // MARK: - Actions
 
-    private func playSong(_ song: Song) {
+    private func playSongInQueue(songs: [Song], startingAt index: Int) {
         Task {
-            await playerService.play(song: song)
+            await playerService.playQueue(songs, startingAt: index)
         }
     }
 

@@ -32,7 +32,7 @@ final class YTMusicClient {
 
     // MARK: - Public API Methods
 
-    /// Fetches the home page content.
+    /// Fetches the home page content with all sections (including continuations).
     func getHome() async throws -> HomeResponse {
         logger.info("Fetching home page")
 
@@ -41,7 +41,93 @@ final class YTMusicClient {
         ]
 
         let data = try await request("browse", body: body)
-        return parseHomeResponse(data)
+        var response = parseHomeResponse(data)
+
+        // Fetch continuation sections if available
+        var continuationToken = extractContinuationToken(from: data)
+        var continuationCount = 0
+        let maxContinuations = 10 // Prevent infinite loops
+
+        while let token = continuationToken, continuationCount < maxContinuations {
+            continuationCount += 1
+            logger.info("Fetching home continuation \(continuationCount)")
+
+            do {
+                let continuationData = try await requestContinuation(token)
+                let additionalSections = parseContinuationResponse(continuationData)
+                response = HomeResponse(sections: response.sections + additionalSections)
+                continuationToken = extractContinuationTokenFromContinuation(continuationData)
+            } catch {
+                logger.warning("Failed to fetch continuation: \(error.localizedDescription)")
+                break
+            }
+        }
+
+        logger.info("Total home sections after continuations: \(response.sections.count)")
+        return response
+    }
+
+    /// Makes a continuation request.
+    private func requestContinuation(_ token: String) async throws -> [String: Any] {
+        let body: [String: Any] = [
+            "continuation": token,
+        ]
+        return try await request("browse", body: body)
+    }
+
+    /// Extracts continuation token from initial browse response.
+    private func extractContinuationToken(from data: [String: Any]) -> String? {
+        guard let contents = data["contents"] as? [String: Any],
+              let singleColumnBrowseResults = contents["singleColumnBrowseResultsRenderer"] as? [String: Any],
+              let tabs = singleColumnBrowseResults["tabs"] as? [[String: Any]],
+              let firstTab = tabs.first,
+              let tabRenderer = firstTab["tabRenderer"] as? [String: Any],
+              let tabContent = tabRenderer["content"] as? [String: Any],
+              let sectionListRenderer = tabContent["sectionListRenderer"] as? [String: Any],
+              let continuations = sectionListRenderer["continuations"] as? [[String: Any]],
+              let firstContinuation = continuations.first,
+              let nextContinuationData = firstContinuation["nextContinuationData"] as? [String: Any],
+              let continuation = nextContinuationData["continuation"] as? String
+        else {
+            return nil
+        }
+        return continuation
+    }
+
+    /// Extracts continuation token from continuation response.
+    private func extractContinuationTokenFromContinuation(_ data: [String: Any]) -> String? {
+        guard let continuationContents = data["continuationContents"] as? [String: Any],
+              let sectionListContinuation = continuationContents["sectionListContinuation"] as? [String: Any],
+              let continuations = sectionListContinuation["continuations"] as? [[String: Any]],
+              let firstContinuation = continuations.first,
+              let nextContinuationData = firstContinuation["nextContinuationData"] as? [String: Any],
+              let continuation = nextContinuationData["continuation"] as? String
+        else {
+            return nil
+        }
+        return continuation
+    }
+
+    /// Parses sections from a continuation response.
+    private func parseContinuationResponse(_ data: [String: Any]) -> [HomeSection] {
+        var sections: [HomeSection] = []
+
+        guard let continuationContents = data["continuationContents"] as? [String: Any],
+              let sectionListContinuation = continuationContents["sectionListContinuation"] as? [String: Any],
+              let contents = sectionListContinuation["contents"] as? [[String: Any]]
+        else {
+            logger.warning("Could not parse continuation response structure")
+            return []
+        }
+
+        for sectionData in contents {
+            if let section = parseHomeSection(sectionData) {
+                sections.append(section)
+            }
+        }
+
+        logger.debug("Parsed \(sections.count) sections from continuation")
+        return sections
     }
 
     /// Searches for content.
@@ -75,9 +161,10 @@ final class YTMusicClient {
         // Handle different ID formats:
         // - VL... = playlist (already has prefix)
         // - PL... = playlist (needs VL prefix)
-        // - RD... = radio/mix (use as-is for watch endpoint)
+        // - RD... = radio/mix (use as-is)
         // - OLAK... = album (use as-is)
-        let browseId: String = if id.hasPrefix("VL") || id.hasPrefix("RD") || id.hasPrefix("OLAK") || id.hasPrefix("UC") {
+        // - MPRE... = album (use as-is)
+        let browseId: String = if id.hasPrefix("VL") || id.hasPrefix("RD") || id.hasPrefix("OLAK") || id.hasPrefix("MPRE") || id.hasPrefix("UC") {
             id
         } else if id.hasPrefix("PL") {
             "VL\(id)"
@@ -226,6 +313,23 @@ final class YTMusicClient {
 
     // MARK: - Response Parsing
 
+    /// Keywords used to identify chart sections for special rendering.
+    private static let chartKeywords = [
+        "chart",
+        "charts",
+        "top 100",
+        "top 50",
+        "trending",
+        "daily top",
+        "weekly top",
+    ]
+
+    /// Checks if a section title indicates a chart section.
+    private func isChartSection(_ title: String) -> Bool {
+        let lowercased = title.lowercased()
+        return Self.chartKeywords.contains { lowercased.contains($0) }
+    }
+
     private func parseHomeResponse(_ data: [String: Any]) -> HomeResponse {
         var sections: [HomeSection] = []
 
@@ -254,17 +358,140 @@ final class YTMusicClient {
     }
 
     private func parseHomeSection(_ data: [String: Any]) -> HomeSection? {
-        // Try musicCarouselShelfRenderer
+        // Try musicCarouselShelfRenderer (most common - horizontal carousels)
         if let carouselRenderer = data["musicCarouselShelfRenderer"] as? [String: Any] {
             return parseMusicCarouselShelf(carouselRenderer)
         }
 
-        // Try musicShelfRenderer
+        // Try musicShelfRenderer (vertical song lists)
         if let shelfRenderer = data["musicShelfRenderer"] as? [String: Any] {
             return parseMusicShelf(shelfRenderer)
         }
 
+        // Try musicCardShelfRenderer (large featured cards like mixes)
+        if let cardShelfRenderer = data["musicCardShelfRenderer"] as? [String: Any] {
+            return parseMusicCardShelf(cardShelfRenderer)
+        }
+
+        // Try musicImmersiveCarouselShelfRenderer (immersive carousels with backgrounds)
+        if let immersiveCarouselRenderer = data["musicImmersiveCarouselShelfRenderer"] as? [String: Any] {
+            return parseMusicImmersiveCarouselShelf(immersiveCarouselRenderer)
+        }
+
+        // Try gridRenderer (used for charts and grids)
+        if let gridRenderer = data["gridRenderer"] as? [String: Any] {
+            return parseGridRenderer(gridRenderer)
+        }
+
+        // Try itemSectionRenderer (wrapper for other renderers)
+        if let itemSectionRenderer = data["itemSectionRenderer"] as? [String: Any],
+           let itemContents = itemSectionRenderer["contents"] as? [[String: Any]]
+        {
+            for itemContent in itemContents {
+                if let section = parseHomeSection(itemContent) {
+                    return section
+                }
+            }
+        }
+
         return nil
+    }
+
+    /// Parses a musicCardShelfRenderer (large featured cards like personalized mixes).
+    private func parseMusicCardShelf(_ data: [String: Any]) -> HomeSection? {
+        // Get title from header
+        let title: String = if let header = data["header"] as? [String: Any],
+                               let headerRenderer = header["musicCardShelfHeaderBasicRenderer"] as? [String: Any],
+                               let titleData = headerRenderer["title"] as? [String: Any],
+                               let runs = titleData["runs"] as? [[String: Any]],
+                               let firstRun = runs.first,
+                               let text = firstRun["text"] as? String
+        {
+            text
+        } else {
+            "Featured"
+        }
+
+        // Parse contents
+        guard let contents = data["contents"] as? [[String: Any]] else {
+            return nil
+        }
+
+        var items: [HomeSectionItem] = []
+        for itemData in contents {
+            if let item = parseHomeSectionItem(itemData) {
+                items.append(item)
+            }
+        }
+
+        guard !items.isEmpty else { return nil }
+
+        return HomeSection(id: UUID().uuidString, title: title, items: items, isChart: isChartSection(title))
+    }
+
+    /// Parses a musicImmersiveCarouselShelfRenderer (immersive carousels with background images).
+    private func parseMusicImmersiveCarouselShelf(_ data: [String: Any]) -> HomeSection? {
+        // Get title from header
+        let title: String = if let header = data["header"] as? [String: Any],
+                               let headerRenderer = header["musicCarouselShelfBasicHeaderRenderer"] as? [String: Any],
+                               let titleData = headerRenderer["title"] as? [String: Any],
+                               let runs = titleData["runs"] as? [[String: Any]],
+                               let firstRun = runs.first,
+                               let text = firstRun["text"] as? String
+        {
+            text
+        } else {
+            "Featured"
+        }
+
+        // Parse contents
+        guard let contents = data["contents"] as? [[String: Any]] else {
+            return nil
+        }
+
+        var items: [HomeSectionItem] = []
+        for itemData in contents {
+            if let item = parseHomeSectionItem(itemData) {
+                items.append(item)
+            }
+        }
+
+        guard !items.isEmpty else { return nil }
+
+        return HomeSection(id: UUID().uuidString, title: title, items: items, isChart: isChartSection(title))
+    }
+
+    /// Parses a gridRenderer (used for charts and grid layouts).
+    private func parseGridRenderer(_ data: [String: Any]) -> HomeSection? {
+        // Get title from header
+        let title: String = if let header = data["header"] as? [String: Any],
+                               let headerRenderer = header["gridHeaderRenderer"] as? [String: Any],
+                               let titleData = headerRenderer["title"] as? [String: Any],
+                               let runs = titleData["runs"] as? [[String: Any]],
+                               let firstRun = runs.first,
+                               let text = firstRun["text"] as? String
+        {
+            text
+        } else {
+            "Charts"
+        }
+
+        // Parse items
+        guard let items = data["items"] as? [[String: Any]] else {
+            return nil
+        }
+
+        var sectionItems: [HomeSectionItem] = []
+        for itemData in items {
+            if let item = parseHomeSectionItem(itemData) {
+                sectionItems.append(item)
+            }
+        }
+
+        guard !sectionItems.isEmpty else { return nil }
+
+        // Grid renderers are typically used for charts
+        return HomeSection(id: UUID().uuidString, title: title, items: sectionItems, isChart: true)
     }
 
     private func parseMusicCarouselShelf(_ data: [String: Any]) -> HomeSection? {
@@ -295,7 +522,7 @@ final class YTMusicClient {
 
         guard !items.isEmpty else { return nil }
 
-        return HomeSection(id: UUID().uuidString, title: title, items: items)
+        return HomeSection(id: UUID().uuidString, title: title, items: items, isChart: isChartSection(title))
     }
 
     private func parseMusicShelf(_ data: [String: Any]) -> HomeSection? {
@@ -324,7 +551,7 @@ final class YTMusicClient {
 
         guard !items.isEmpty else { return nil }
 
-        return HomeSection(id: UUID().uuidString, title: title, items: items)
+        return HomeSection(id: UUID().uuidString, title: title, items: items, isChart: isChartSection(title))
     }
 
     private func parseHomeSectionItem(_ data: [String: Any]) -> HomeSectionItem? {
@@ -377,9 +604,45 @@ final class YTMusicClient {
             if let browseEndpoint = navigationEndpoint["browseEndpoint"] as? [String: Any],
                let browseId = browseEndpoint["browseId"] as? String
             {
-                // Determine type based on browseId prefix
-                if browseId.hasPrefix("MPRE") || browseId.hasPrefix("OLAK") {
-                    // Album
+                // Try to determine type from pageType (more reliable than browseId prefix)
+                var pageType: String?
+                if let contextConfigs = browseEndpoint["browseEndpointContextSupportedConfigs"] as? [String: Any],
+                   let musicConfig = contextConfigs["browseEndpointContextMusicConfig"] as? [String: Any],
+                   let type = musicConfig["pageType"] as? String
+                {
+                    pageType = type
+                }
+
+                // Determine type based on pageType first, then fall back to browseId prefix
+                if pageType == "MUSIC_PAGE_TYPE_ALBUM" {
+                    let album = Album(
+                        id: browseId,
+                        title: title,
+                        artists: extractArtists(from: data),
+                        thumbnailURL: thumbnailURL,
+                        year: nil,
+                        trackCount: nil
+                    )
+                    return .album(album)
+                } else if pageType == "MUSIC_PAGE_TYPE_PLAYLIST" {
+                    let playlist = Playlist(
+                        id: browseId,
+                        title: title,
+                        description: nil,
+                        thumbnailURL: thumbnailURL,
+                        trackCount: nil,
+                        author: extractSubtitle(from: data)
+                    )
+                    return .playlist(playlist)
+                } else if pageType == "MUSIC_PAGE_TYPE_ARTIST" || pageType == "MUSIC_PAGE_TYPE_USER_CHANNEL" {
+                    let artist = Artist(
+                        id: browseId,
+                        name: title,
+                        thumbnailURL: thumbnailURL
+                    )
+                    return .artist(artist)
+                } else if browseId.hasPrefix("MPRE") || browseId.hasPrefix("OLAK") {
+                    // Fallback: Album (browseId prefix heuristic)
                     let album = Album(
                         id: browseId,
                         title: title,
@@ -390,7 +653,7 @@ final class YTMusicClient {
                     )
                     return .album(album)
                 } else if browseId.hasPrefix("VL") || browseId.hasPrefix("PL") || browseId.hasPrefix("RD") {
-                    // Playlist
+                    // Fallback: Playlist (browseId prefix heuristic)
                     let playlist = Playlist(
                         id: browseId,
                         title: title,
@@ -401,7 +664,7 @@ final class YTMusicClient {
                     )
                     return .playlist(playlist)
                 } else if browseId.hasPrefix("UC") {
-                    // Artist/Channel
+                    // Fallback: Artist/Channel (browseId prefix heuristic)
                     let artist = Artist(
                         id: browseId,
                         name: title,
@@ -812,18 +1075,34 @@ final class YTMusicClient {
                let sectionContents = sectionListRenderer["contents"] as? [[String: Any]]
             {
                 logger.debug("Found singleColumnBrowseResultsRenderer with \(sectionContents.count) sections")
-                tracks.append(contentsOf: parseTracksFromSections(sectionContents))
+                tracks.append(contentsOf: parseTracksFromSections(sectionContents, fallbackThumbnailURL: thumbnailURL))
             }
 
-            // Try twoColumnBrowseResultsRenderer path (used by some playlists)
+            // Try twoColumnBrowseResultsRenderer path (used by albums and some playlists)
             if tracks.isEmpty,
-               let twoColumnRenderer = contents["twoColumnBrowseResultsRenderer"] as? [String: Any],
-               let secondaryContents = twoColumnRenderer["secondaryContents"] as? [String: Any],
-               let sectionListRenderer = secondaryContents["sectionListRenderer"] as? [String: Any],
-               let sectionContents = sectionListRenderer["contents"] as? [[String: Any]]
+               let twoColumnRenderer = contents["twoColumnBrowseResultsRenderer"] as? [String: Any]
             {
-                logger.debug("Found twoColumnBrowseResultsRenderer with \(sectionContents.count) sections")
-                tracks.append(contentsOf: parseTracksFromSections(sectionContents))
+                // Try secondaryContents first (some playlist formats)
+                if let secondaryContents = twoColumnRenderer["secondaryContents"] as? [String: Any],
+                   let sectionListRenderer = secondaryContents["sectionListRenderer"] as? [String: Any],
+                   let sectionContents = sectionListRenderer["contents"] as? [[String: Any]]
+                {
+                    logger.debug("Found twoColumnBrowseResultsRenderer secondaryContents with \(sectionContents.count) sections")
+                    tracks.append(contentsOf: parseTracksFromSections(sectionContents, fallbackThumbnailURL: thumbnailURL))
+                }
+
+                // Try tabs path (used by albums)
+                if tracks.isEmpty,
+                   let tabs = twoColumnRenderer["tabs"] as? [[String: Any]],
+                   let firstTab = tabs.first,
+                   let tabRenderer = firstTab["tabRenderer"] as? [String: Any],
+                   let tabContent = tabRenderer["content"] as? [String: Any],
+                   let sectionListRenderer = tabContent["sectionListRenderer"] as? [String: Any],
+                   let sectionContents = sectionListRenderer["contents"] as? [[String: Any]]
+                {
+                    logger.debug("Found twoColumnBrowseResultsRenderer tabs with \(sectionContents.count) sections")
+                    tracks.append(contentsOf: parseTracksFromSections(sectionContents, fallbackThumbnailURL: thumbnailURL))
+                }
             }
         }
 
@@ -996,7 +1275,7 @@ final class YTMusicClient {
     }
 
     /// Parses tracks from section contents.
-    private func parseTracksFromSections(_ sections: [[String: Any]]) -> [Song] {
+    private func parseTracksFromSections(_ sections: [[String: Any]], fallbackThumbnailURL: URL? = nil) -> [Song] {
         var tracks: [Song] = []
 
         for sectionData in sections {
@@ -1004,21 +1283,21 @@ final class YTMusicClient {
             if let shelfRenderer = sectionData["musicShelfRenderer"] as? [String: Any],
                let shelfContents = shelfRenderer["contents"] as? [[String: Any]]
             {
-                tracks.append(contentsOf: parseTracksFromItems(shelfContents))
+                tracks.append(contentsOf: parseTracksFromItems(shelfContents, fallbackThumbnailURL: fallbackThumbnailURL))
             }
 
             // Try musicPlaylistShelfRenderer
             if let playlistShelf = sectionData["musicPlaylistShelfRenderer"] as? [String: Any],
                let shelfContents = playlistShelf["contents"] as? [[String: Any]]
             {
-                tracks.append(contentsOf: parseTracksFromItems(shelfContents))
+                tracks.append(contentsOf: parseTracksFromItems(shelfContents, fallbackThumbnailURL: fallbackThumbnailURL))
             }
 
             // Try musicCarouselShelfRenderer (sometimes used for related content)
             if let carouselShelf = sectionData["musicCarouselShelfRenderer"] as? [String: Any],
                let shelfContents = carouselShelf["contents"] as? [[String: Any]]
             {
-                tracks.append(contentsOf: parseTracksFromItems(shelfContents))
+                tracks.append(contentsOf: parseTracksFromItems(shelfContents, fallbackThumbnailURL: fallbackThumbnailURL))
             }
         }
 
@@ -1026,12 +1305,12 @@ final class YTMusicClient {
     }
 
     /// Parses tracks from item array.
-    private func parseTracksFromItems(_ items: [[String: Any]]) -> [Song] {
+    private func parseTracksFromItems(_ items: [[String: Any]], fallbackThumbnailURL: URL? = nil) -> [Song] {
         var tracks: [Song] = []
 
         for itemData in items {
             if let responsiveRenderer = itemData["musicResponsiveListItemRenderer"] as? [String: Any] {
-                if let song = parseSongFromResponsiveRenderer(responsiveRenderer) {
+                if let song = parseSongFromResponsiveRenderer(responsiveRenderer, fallbackThumbnailURL: fallbackThumbnailURL) {
                     tracks.append(song)
                 }
             }
@@ -1048,7 +1327,7 @@ final class YTMusicClient {
     }
 
     /// Parses a song from musicResponsiveListItemRenderer.
-    private func parseSongFromResponsiveRenderer(_ data: [String: Any]) -> Song? {
+    private func parseSongFromResponsiveRenderer(_ data: [String: Any], fallbackThumbnailURL: URL? = nil) -> Song? {
         var videoId: String?
 
         // Try playlistItemData
@@ -1085,16 +1364,17 @@ final class YTMusicClient {
         guard let videoId else { return nil }
 
         let thumbs = extractThumbnails(from: data)
-        let thumbURL = thumbs.last.flatMap { URL(string: $0) }
+        let thumbURL = thumbs.last.flatMap { URL(string: $0) } ?? fallbackThumbnailURL
         let songTitle = extractTitleFromFlexColumns(data)
         let artists = extractArtistsFromFlexColumns(data)
+        let duration = extractDurationFromFixedColumns(data)
 
         return Song(
             id: videoId,
             title: songTitle,
             artists: artists,
             album: nil,
-            duration: nil,
+            duration: duration,
             thumbnailURL: thumbURL,
             videoId: videoId
         )
@@ -1208,6 +1488,21 @@ final class YTMusicClient {
             }
         }
 
+        // Try fixedColumns (used in album track listings)
+        if let fixedColumns = data["fixedColumns"] as? [[String: Any]] {
+            for column in fixedColumns {
+                if let renderer = column["musicResponsiveListItemFixedColumnRenderer"] as? [String: Any],
+                   let text = renderer["text"] as? [String: Any],
+                   let runs = text["runs"] as? [[String: Any]],
+                   let firstRun = runs.first,
+                   let durationText = firstRun["text"] as? String
+                {
+                    // This column has duration, not thumbnail - continue looking
+                    _ = durationText
+                }
+            }
+        }
+
         return []
     }
 
@@ -1306,5 +1601,62 @@ final class YTMusicClient {
         }
 
         return artists
+    }
+
+    /// Extracts duration from fixedColumns (used in album/playlist track listings).
+    /// Also tries flexColumns subtitle as fallback (duration sometimes at end like "Artist • 3:45").
+    private func extractDurationFromFixedColumns(_ data: [String: Any]) -> TimeInterval? {
+        // First try fixedColumns
+        if let fixedColumns = data["fixedColumns"] as? [[String: Any]] {
+            for column in fixedColumns {
+                if let renderer = column["musicResponsiveListItemFixedColumnRenderer"] as? [String: Any],
+                   let text = renderer["text"] as? [String: Any],
+                   let runs = text["runs"] as? [[String: Any]],
+                   let firstRun = runs.first,
+                   let durationText = firstRun["text"] as? String
+                {
+                    if let duration = parseDurationString(durationText) {
+                        return duration
+                    }
+                }
+            }
+        }
+
+        // Fallback: Try extracting duration from the last part of flexColumns subtitle
+        // Format: "Artist • Album • 3:45" or just "Artist • 3:45"
+        if let flexColumns = data["flexColumns"] as? [[String: Any]],
+           flexColumns.count > 1,
+           let secondColumn = flexColumns[safe: 1],
+           let renderer = secondColumn["musicResponsiveListItemFlexColumnRenderer"] as? [String: Any],
+           let textData = renderer["text"] as? [String: Any],
+           let runs = textData["runs"] as? [[String: Any]]
+        {
+            // Look for duration pattern in runs (typically the last text element)
+            for run in runs.reversed() {
+                if let text = run["text"] as? String {
+                    if let duration = parseDurationString(text) {
+                        return duration
+                    }
+                }
+            }
+        }
+
+        return nil
+    }
+
+    /// Parses duration string like "3:45" or "1:02:30" to TimeInterval.
+    private func parseDurationString(_ string: String) -> TimeInterval? {
+        let components = string.split(separator: ":").compactMap { Int($0) }
+        guard components.count >= 2 else { return nil }
+
+        if components.count == 2 {
+            // MM:SS
+            return TimeInterval(components[0] * 60 + components[1])
+        } else if components.count == 3 {
+            // HH:MM:SS
+            return TimeInterval(components[0] * 3600 + components[1] * 60 + components[2])
+        }
+
+        return nil
     }
 }

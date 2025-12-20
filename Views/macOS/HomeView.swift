@@ -82,14 +82,84 @@ struct HomeView: View {
                 .font(.title2)
                 .fontWeight(.semibold)
 
-            ScrollView(.horizontal, showsIndicators: false) {
-                LazyHStack(spacing: 16) {
-                    ForEach(section.items) { item in
-                        itemCard(item)
+            if section.isChart {
+                // Chart sections: vertical numbered list
+                chartListView(section)
+            } else {
+                // Regular sections: horizontal carousel
+                ScrollView(.horizontal, showsIndicators: false) {
+                    LazyHStack(spacing: 16) {
+                        ForEach(section.items) { item in
+                            itemCard(item)
+                        }
                     }
                 }
             }
         }
+    }
+
+    /// Renders a chart section as a vertical numbered list.
+    private func chartListView(_ section: HomeSection) -> some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            LazyHStack(spacing: 16) {
+                ForEach(Array(section.items.enumerated()), id: \.element.id) { index, item in
+                    chartCard(item, rank: index + 1)
+                }
+            }
+        }
+    }
+
+    /// Renders a chart item with a rank badge.
+    private func chartCard(_ item: HomeSectionItem, rank: Int) -> some View {
+        Button {
+            playItem(item)
+        } label: {
+            ZStack(alignment: .bottomLeading) {
+                VStack(alignment: .leading, spacing: 8) {
+                    // Thumbnail
+                    AsyncImage(url: item.thumbnailURL?.highQualityThumbnailURL) { image in
+                        image
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                    } placeholder: {
+                        Rectangle()
+                            .fill(.quaternary)
+                            .overlay {
+                                Image(systemName: "music.note")
+                                    .font(.largeTitle)
+                                    .foregroundStyle(.secondary)
+                            }
+                    }
+                    .frame(width: 160, height: 160)
+                    .clipShape(.rect(cornerRadius: 8))
+
+                    // Title
+                    Text(item.title)
+                        .font(.system(size: 13, weight: .medium))
+                        .lineLimit(2)
+                        .multilineTextAlignment(.leading)
+                        .frame(width: 160, alignment: .leading)
+
+                    // Subtitle
+                    if let subtitle = item.subtitle {
+                        Text(subtitle)
+                            .font(.system(size: 11))
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                            .frame(width: 160, alignment: .leading)
+                    }
+                }
+
+                // Rank badge overlay
+                Text("\(rank)")
+                    .font(.system(size: 32, weight: .bold, design: .rounded))
+                    .foregroundStyle(.white)
+                    .shadow(color: .black.opacity(0.5), radius: 2, x: 0, y: 1)
+                    .padding(.leading, 8)
+                    .padding(.bottom, 60)
+            }
+        }
+        .buttonStyle(.plain)
     }
 
     private func itemCard(_ item: HomeSectionItem) -> some View {

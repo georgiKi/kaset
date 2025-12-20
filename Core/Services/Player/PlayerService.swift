@@ -583,34 +583,62 @@ final class PlayerService: NSObject {
     /// Skips to next track.
     func next() async {
         logger.debug("Skipping to next track")
+
+        // Prioritize local queue if we have one
+        if !queue.isEmpty {
+            if currentIndex < queue.count - 1 {
+                currentIndex += 1
+                if let nextSong = queue[safe: currentIndex] {
+                    await play(song: nextSong)
+                }
+            }
+            // At end of queue, don't do anything
+            return
+        }
+
+        // Fall back to YouTube's next if no local queue
         if pendingPlayVideoId != nil {
             SingletonPlayerWebView.shared.next()
-        } else if currentIndex < queue.count - 1 {
-            currentIndex += 1
-            if let nextSong = queue[safe: currentIndex] {
-                await play(song: nextSong)
-            }
         }
     }
 
     /// Goes to previous track.
     func previous() async {
         logger.debug("Going to previous track")
+
+        // Prioritize local queue if we have one
+        if !queue.isEmpty {
+            if progress > 3 {
+                // Restart current track
+                if pendingPlayVideoId != nil {
+                    SingletonPlayerWebView.shared.seek(to: 0)
+                } else {
+                    await seek(to: 0)
+                }
+            } else if currentIndex > 0 {
+                currentIndex -= 1
+                if let prevSong = queue[safe: currentIndex] {
+                    await play(song: prevSong)
+                }
+            } else {
+                // At start of queue, just restart current track
+                if pendingPlayVideoId != nil {
+                    SingletonPlayerWebView.shared.seek(to: 0)
+                } else {
+                    await seek(to: 0)
+                }
+            }
+            return
+        }
+
+        // Fall back to YouTube's previous if no local queue
         if pendingPlayVideoId != nil {
-            // If more than 3 seconds in, restart. Otherwise go to previous.
             if progress > 3 {
                 SingletonPlayerWebView.shared.seek(to: 0)
             } else {
                 SingletonPlayerWebView.shared.previous()
             }
         } else if progress > 3 {
-            await seek(to: 0)
-        } else if currentIndex > 0 {
-            currentIndex -= 1
-            if let prevSong = queue[safe: currentIndex] {
-                await play(song: prevSong)
-            }
-        } else {
             await seek(to: 0)
         }
     }

@@ -58,6 +58,12 @@ final class PlayerService: NSObject {
     /// Current volume (0.0 - 1.0).
     private(set) var volume: Double = 1.0
 
+    /// Volume before muting, for unmute restoration.
+    private var volumeBeforeMute: Double = 1.0
+
+    /// Whether audio is currently muted.
+    var isMuted: Bool { volume == 0 }
+
     /// Whether shuffle mode is enabled.
     private(set) var shuffleEnabled: Bool = false
 
@@ -335,10 +341,26 @@ final class PlayerService: NSObject {
         }
     }
 
+    /// Toggles mute state. Remembers previous volume for unmuting.
+    func toggleMute() async {
+        if isMuted {
+            // Unmute - restore previous volume
+            let restoredVolume = volumeBeforeMute > 0 ? volumeBeforeMute : 1.0
+            await setVolume(restoredVolume)
+            logger.info("Unmuted, volume restored to \(restoredVolume)")
+        } else {
+            // Mute - save current volume and set to 0
+            volumeBeforeMute = volume
+            await setVolume(0)
+            logger.info("Muted")
+        }
+    }
+
     /// Toggles shuffle mode.
     func toggleShuffle() {
         shuffleEnabled.toggle()
-        logger.info("Shuffle mode: \(self.shuffleEnabled ? "enabled" : "disabled")")
+        let status = shuffleEnabled ? "enabled" : "disabled"
+        logger.info("Shuffle mode: \(status)")
     }
 
     /// Cycles through repeat modes: off -> all -> one -> off.
@@ -351,7 +373,8 @@ final class PlayerService: NSObject {
         case .one:
             repeatMode = .off
         }
-        logger.info("Repeat mode: \(String(describing: self.repeatMode))")
+        let mode = repeatMode
+        logger.info("Repeat mode: \(String(describing: mode))")
     }
 
     /// Stops playback and clears state.

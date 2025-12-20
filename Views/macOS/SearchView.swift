@@ -9,7 +9,16 @@ struct SearchView: View {
     @Environment(PlayerService.self) private var playerService
     @State private var navigationPath = NavigationPath()
 
+    /// External trigger for focusing the search field (from keyboard shortcut).
+    @Binding var focusTrigger: Bool
+
     @FocusState private var isSearchFieldFocused: Bool
+
+    /// Initializes SearchView with optional focus trigger binding.
+    init(viewModel: SearchViewModel, focusTrigger: Binding<Bool> = .constant(false)) {
+        _viewModel = State(initialValue: viewModel)
+        _focusTrigger = focusTrigger
+    }
 
     var body: some View {
         NavigationStack(path: $navigationPath) {
@@ -47,6 +56,12 @@ struct SearchView: View {
         }
         .onAppear {
             isSearchFieldFocused = true
+        }
+        .onChange(of: focusTrigger) { _, newValue in
+            if newValue {
+                isSearchFieldFocused = true
+                focusTrigger = false
+            }
         }
     }
 
@@ -323,8 +338,9 @@ extension SearchResultItem {
 }
 
 #Preview {
+    @Previewable @State var focusTrigger = false
     let authService = AuthService()
     let client = YTMusicClient(authService: authService, webKitManager: .shared)
-    SearchView(viewModel: SearchViewModel(client: client))
+    SearchView(viewModel: SearchViewModel(client: client), focusTrigger: $focusTrigger)
         .environment(PlayerService())
 }

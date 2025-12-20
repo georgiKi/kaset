@@ -9,7 +9,9 @@ struct MainWindow: View {
     @Environment(PlayerService.self) private var playerService
     @Environment(WebKitManager.self) private var webKitManager
 
-    @State private var selectedNavigation: NavigationItem? = .home
+    /// Binding to navigation selection for keyboard shortcut control from parent.
+    @Binding var navigationSelection: NavigationItem?
+
     @State private var showLoginSheet = false
     @State private var ytMusicClient: YTMusicClient?
     @State private var nowPlayingManager: NowPlayingManager?
@@ -94,9 +96,9 @@ struct MainWindow: View {
     private var mainContent: some View {
         if let client = ytMusicClient {
             NavigationSplitView {
-                Sidebar(selection: $selectedNavigation)
+                Sidebar(selection: $navigationSelection)
             } detail: {
-                detailView(for: selectedNavigation, client: client)
+                detailView(for: navigationSelection, client: client)
             }
             .frame(minWidth: 900, minHeight: 600)
         } else {
@@ -183,8 +185,9 @@ enum NavigationItem: String, Hashable, CaseIterable, Identifiable {
 
 @available(macOS 26.0, *)
 #Preview {
+    @Previewable @State var navSelection: NavigationItem? = .home
     let authService = AuthService()
-    MainWindow()
+    MainWindow(navigationSelection: $navSelection)
         .environment(authService)
         .environment(PlayerService())
         .environment(WebKitManager.shared)

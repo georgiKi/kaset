@@ -10,9 +10,34 @@ A native macOS YouTube Music client built with Swift and SwiftUI.
 - 🎧 **YouTube Music Premium Support** — Full playback of DRM-protected content via your existing subscription
 - 🎛️ **System Integration** — Now Playing in Control Center, media key support, Dock menu controls
 - 🔊 **Background Audio** — Music continues playing when the window is closed; stops on quit
+- ⌨️ **Keyboard Shortcuts** — Full keyboard control for playback, navigation, and more
 - 🧭 **Explore** — Discover new releases, charts, and moods & genres
 - 📚 **Library Access** — Browse your playlists, liked songs, albums, and artists
 - 🔍 **Search** — Find songs, albums, artists, and playlists
+
+## Keyboard Shortcuts
+
+### Playback
+
+| Shortcut | Action |
+|----------|--------|
+| `Space` | Play / Pause |
+| `⌘→` | Next track |
+| `⌘←` | Previous track |
+| `⌘↑` | Volume up |
+| `⌘↓` | Volume down |
+| `⌘⇧M` | Mute / Unmute |
+| `⌘S` | Toggle shuffle |
+| `⌘R` | Cycle repeat mode (Off → All → One) |
+
+### Navigation
+
+| Shortcut | Action |
+|----------|--------|
+| `⌘1` | Go to Home |
+| `⌘2` | Go to Explore |
+| `⌘3` | Go to Library |
+| `⌘F` | Go to Search |
 
 ## Requirements
 

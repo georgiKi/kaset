@@ -87,6 +87,8 @@
 		E50000010000000000000403 /* PlaylistParserTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E50000020000000000000403 /* PlaylistParserTests.swift */; };
 		E50000010000000000000500 /* ErrorPresenter.swift in Sources */ = {isa = PBXBuildFile; fileRef = E50000020000000000000500 /* ErrorPresenter.swift */; };
 		E50000010000000000000501 /* ErrorPresenterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E50000020000000000000501 /* ErrorPresenterTests.swift */; };
+		E50000010000000000000076 /* ColorExtractor.swift in Sources */ = {isa = PBXBuildFile; fileRef = E50000020000000000000076 /* ColorExtractor.swift */; };
+		E50000010000000000000093 /* AccentBackground.swift in Sources */ = {isa = PBXBuildFile; fileRef = E50000020000000000000093 /* AccentBackground.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -185,6 +187,8 @@
 		E50000020000000000000403 /* PlaylistParserTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaylistParserTests.swift; sourceTree = "<group>"; };
 		E50000020000000000000500 /* ErrorPresenter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ErrorPresenter.swift; sourceTree = "<group>"; };
 		E50000020000000000000501 /* ErrorPresenterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ErrorPresenterTests.swift; sourceTree = "<group>"; };
+		E50000020000000000000076 /* ColorExtractor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ColorExtractor.swift; sourceTree = "<group>"; };
+		E50000020000000000000093 /* AccentBackground.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccentBackground.swift; sourceTree = "<group>"; };
 		F525663B77A8906E1792B4EC /* ArtistDetailViewModel.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ArtistDetailViewModel.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -370,6 +374,7 @@
 				E50000020000000000000071 /* Extensions.swift */,
 				E50000020000000000000074 /* RetryPolicy.swift */,
 				E50000020000000000000075 /* ImageCache.swift */,
+				E50000020000000000000076 /* ColorExtractor.swift */,
 			);
 			path = Utilities;
 			sourceTree = "<group>";
@@ -392,6 +397,7 @@
 				E50000020000000000000089 /* CachedAsyncImage.swift */,
 				B5B735BB57DD2ACF165D683F /* MiniPlayerWebView.swift */,
 				D2E3F4A5B6C7D8E9F0A1B2C3 /* MiniPlayerViews.swift */,
+				E50000020000000000000093 /* AccentBackground.swift */,
 			);
 			path = macOS;
 			sourceTree = "<group>";
@@ -590,6 +596,8 @@
 				E50000010000000000000303 /* PlaylistParser.swift in Sources */,
 				E50000010000000000000304 /* ArtistParser.swift in Sources */,
 				E50000010000000000000500 /* ErrorPresenter.swift in Sources */,
+				E50000010000000000000076 /* ColorExtractor.swift in Sources */,
+				E50000010000000000000093 /* AccentBackground.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

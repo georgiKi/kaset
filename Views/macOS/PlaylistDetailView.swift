@@ -35,6 +35,7 @@ struct PlaylistDetailView: View {
                 errorView(message: message)
             }
         }
+        .accentBackground(from: viewModel.playlistDetail?.thumbnailURL?.highQualityThumbnailURL)
         .navigationTitle(playlist.title)
         .safeAreaInset(edge: .bottom, spacing: 0) {
             PlayerBar()

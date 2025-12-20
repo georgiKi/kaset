@@ -1,0 +1,90 @@
+import SwiftUI
+
+/// A background view that displays a gradient based on colors extracted from an image.
+/// Creates an effect similar to Apple Music/YouTube Music album backgrounds.
+@available(macOS 26.0, *)
+struct AccentBackground: View {
+    let imageURL: URL?
+    @State private var palette: ColorExtractor.ColorPalette = .default
+    @State private var isLoaded = false
+
+    var body: some View {
+        ZStack {
+            // Base gradient from extracted colors
+            LinearGradient(
+                colors: [palette.primary, palette.secondary, Color.black.opacity(0.95)],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+
+            // Subtle radial overlay for depth
+            RadialGradient(
+                colors: [
+                    palette.primary.opacity(0.3),
+                    Color.clear
+                ],
+                center: .topLeading,
+                startRadius: 0,
+                endRadius: 500
+            )
+        }
+        .animation(.easeInOut(duration: 0.5), value: isLoaded)
+        .task(id: imageURL) {
+            await loadPalette()
+        }
+    }
+
+    private func loadPalette() async {
+        guard let url = imageURL else {
+            palette = .default
+            isLoaded = true
+            return
+        }
+
+        // Fetch image data
+        do {
+            let (data, _) = try await URLSession.shared.data(from: url)
+            let extracted = await ColorExtractor.extractPalette(from: data)
+            palette = extracted
+            isLoaded = true
+        } catch {
+            DiagnosticsLogger.ui.debug("Failed to extract accent colors: \(error.localizedDescription)")
+            palette = .default
+            isLoaded = true
+        }
+    }
+}
+
+/// View modifier to apply accent background based on album art.
+@available(macOS 26.0, *)
+struct AccentBackgroundModifier: ViewModifier {
+    let imageURL: URL?
+
+    func body(content: Content) -> some View {
+        content
+            .background {
+                AccentBackground(imageURL: imageURL)
+                    .ignoresSafeArea()
+            }
+    }
+}
+
+@available(macOS 26.0, *)
+extension View {
+    /// Applies an accent color background gradient extracted from the given image URL.
+    /// - Parameter imageURL: The URL of the image to extract colors from.
+    /// - Returns: A view with the accent background applied.
+    func accentBackground(from imageURL: URL?) -> some View {
+        modifier(AccentBackgroundModifier(imageURL: imageURL))
+    }
+}
+
+#Preview {
+    VStack {
+        Text("Accent Background Preview")
+            .font(.largeTitle)
+            .foregroundStyle(.white)
+    }
+    .frame(width: 400, height: 600)
+    .accentBackground(from: nil)
+}

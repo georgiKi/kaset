@@ -22,6 +22,7 @@ struct ArtistDetailView: View {
                 errorView(message: message)
             }
         }
+        .accentBackground(from: viewModel.artistDetail?.thumbnailURL?.highQualityThumbnailURL)
         .navigationTitle(artist.name)
         .safeAreaInset(edge: .bottom, spacing: 0) {
             PlayerBar()

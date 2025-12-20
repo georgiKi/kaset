@@ -67,3 +67,6 @@ brew install --cask kaset --no-quarantine
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, architecture, and coding guidelines.
+
+## Disclaimer
+Kaset is an unofficial application and not affiliated with YouTube or Google Inc. in any way. "YouTube", "YouTube Music" and the "YouTube Logo" are registered trademarks of Google Inc.

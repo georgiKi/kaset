@@ -55,6 +55,8 @@ For detailed information, see the `docs/` folder:
 
 > ⚠️ **No Third-Party Frameworks** — Do not introduce third-party dependencies without asking first.
 
+> ⚠️ **Prefer API over WebView** — Always use `YTMusicClient` API calls when functionality exists. Only use WebView for playback (DRM-protected audio) and authentication. API calls are faster, more testable, and reduce WebView complexity.
+
 ### Build & Verify
 
 After modifying code, verify the build:

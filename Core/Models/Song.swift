@@ -12,6 +12,40 @@ struct Song: Identifiable, Codable, Hashable, Sendable {
     let thumbnailURL: URL?
     let videoId: String
 
+    /// Like/dislike status of the song (nil if unknown).
+    var likeStatus: LikeStatus?
+
+    /// Whether the song is in the user's library (nil if unknown).
+    var isInLibrary: Bool?
+
+    /// Feedback tokens for library add/remove operations.
+    var feedbackTokens: FeedbackTokens?
+
+    /// Memberwise initializer with default values for mutable properties.
+    init(
+        id: String,
+        title: String,
+        artists: [Artist],
+        album: Album? = nil,
+        duration: TimeInterval? = nil,
+        thumbnailURL: URL? = nil,
+        videoId: String,
+        likeStatus: LikeStatus? = nil,
+        isInLibrary: Bool? = nil,
+        feedbackTokens: FeedbackTokens? = nil
+    ) {
+        self.id = id
+        self.title = title
+        self.artists = artists
+        self.album = album
+        self.duration = duration
+        self.thumbnailURL = thumbnailURL
+        self.videoId = videoId
+        self.likeStatus = likeStatus
+        self.isInLibrary = isInLibrary
+        self.feedbackTokens = feedbackTokens
+    }
+
     /// Display string for artists (comma-separated).
     var artistsDisplay: String {
         artists.map(\.name).joined(separator: ", ")
@@ -80,5 +114,18 @@ extension Song {
             return TimeInterval(components[0] * 3600 + components[1] * 60 + components[2])
         }
         return nil
+    }
+}
+
+// MARK: - Equatable & Hashable
+
+extension Song {
+    static func == (lhs: Song, rhs: Song) -> Bool {
+        // Compare by video ID for identity equality
+        lhs.videoId == rhs.videoId
+    }
+
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(videoId)
     }
 }

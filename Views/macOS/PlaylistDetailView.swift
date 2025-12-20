@@ -7,6 +7,19 @@ struct PlaylistDetailView: View {
     @State var viewModel: PlaylistDetailViewModel
     @Environment(PlayerService.self) private var playerService
 
+    /// Tracks whether this playlist has been added to library in this session.
+    @State private var isAddedToLibrary: Bool = false
+
+    /// Computed property to check if playlist is in library.
+    private var isInLibrary: Bool {
+        LibraryViewModel.shared?.isInLibrary(playlistId: playlist.id) ?? false
+    }
+
+    init(playlist: Playlist, viewModel: PlaylistDetailViewModel) {
+        self.playlist = playlist
+        self._viewModel = State(initialValue: viewModel)
+    }
+
     var body: some View {
         Group {
             switch viewModel.loadingState {
@@ -111,6 +124,19 @@ struct PlaylistDetailView: View {
                     .controlSize(.large)
                     .disabled(detail.tracks.isEmpty)
 
+                    // Add/Remove Library button
+                    let currentlyInLibrary = isInLibrary || isAddedToLibrary
+                    Button {
+                        toggleLibrary()
+                    } label: {
+                        Label(
+                            currentlyInLibrary ? "Added to Library" : "Add to Library",
+                            systemImage: currentlyInLibrary ? "checkmark.circle.fill" : "plus.circle"
+                        )
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.large)
+
                     // Track count
                     Text("\(detail.tracks.count) songs")
                         .font(.subheadline)
@@ -195,6 +221,27 @@ struct PlaylistDetailView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .contextMenu {
+            Button {
+                playTrackInQueue(tracks: tracks, startingAt: index)
+            } label: {
+                Label("Play", systemImage: "play.fill")
+            }
+
+            Divider()
+
+            Button {
+                likeSong(track)
+            } label: {
+                Label("Like", systemImage: "hand.thumbsup")
+            }
+
+            Button {
+                dislikeSong(track)
+            } label: {
+                Label("Dislike", systemImage: "hand.thumbsdown")
+            }
+        }
     }
 
     private func errorView(message: String) -> some View {
@@ -232,6 +279,47 @@ struct PlaylistDetailView: View {
         guard !tracks.isEmpty else { return }
         Task {
             await playerService.playQueue(tracks, startingAt: 0)
+        }
+    }
+
+    private func likeSong(_ song: Song) {
+        // Play the song first so it becomes current, then like it
+        Task {
+            await playerService.play(song: song)
+            // Small delay to ensure track is set
+            try? await Task.sleep(for: .milliseconds(100))
+            playerService.likeCurrentTrack()
+        }
+    }
+
+    private func dislikeSong(_ song: Song) {
+        Task {
+            await playerService.play(song: song)
+            try? await Task.sleep(for: .milliseconds(100))
+            playerService.dislikeCurrentTrack()
+        }
+    }
+
+    private func toggleLibrary() {
+        let currentlyInLibrary = isInLibrary || isAddedToLibrary
+        Task {
+            do {
+                if currentlyInLibrary {
+                    try await viewModel.client.unsubscribeFromPlaylist(playlistId: playlist.id)
+                    isAddedToLibrary = false
+                    LibraryViewModel.shared?.removeFromLibrarySet(playlistId: playlist.id)
+                    await LibraryViewModel.shared?.refresh()
+                    DiagnosticsLogger.api.info("Removed playlist from library: \(playlist.title)")
+                } else {
+                    try await viewModel.client.subscribeToPlaylist(playlistId: playlist.id)
+                    isAddedToLibrary = true
+                    LibraryViewModel.shared?.addToLibrarySet(playlistId: playlist.id)
+                    await LibraryViewModel.shared?.refresh()
+                    DiagnosticsLogger.api.info("Added playlist to library: \(playlist.title)")
+                }
+            } catch {
+                DiagnosticsLogger.api.error("Failed to toggle library status: \(error.localizedDescription)")
+            }
         }
     }
 }

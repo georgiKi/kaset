@@ -470,6 +470,62 @@ final class SingletonPlayerWebView {
         webView.evaluateJavaScript(script, completionHandler: nil)
     }
 
+    // MARK: - Like/Dislike/Library Controls
+
+    /// Click the like (thumbs up) button in the player bar.
+    func clickLikeButton() {
+        guard let webView else { return }
+        logger.debug("clickLikeButton() called")
+
+        let script = """
+            (function() {
+                // Try the like button in the player bar
+                const likeBtn = document.querySelector('ytmusic-like-button-renderer #button-shape-like button, ytmusic-like-button-renderer .like');
+                if (likeBtn) { likeBtn.click(); return 'clicked-like'; }
+
+                // Try alternative selector
+                const altLikeBtn = document.querySelector('.ytmusic-player-bar ytmusic-like-button-renderer button[aria-label*="like" i]');
+                if (altLikeBtn) { altLikeBtn.click(); return 'clicked-alt-like'; }
+
+                return 'no-like-button';
+            })();
+        """
+        webView.evaluateJavaScript(script) { [weak self] result, error in
+            if let error {
+                self?.logger.error("clickLikeButton error: \(error.localizedDescription)")
+            } else {
+                self?.logger.debug("clickLikeButton result: \(String(describing: result))")
+            }
+        }
+    }
+
+    /// Click the dislike (thumbs down) button in the player bar.
+    func clickDislikeButton() {
+        guard let webView else { return }
+        logger.debug("clickDislikeButton() called")
+
+        let script = """
+            (function() {
+                // Try the dislike button in the player bar
+                const dislikeBtn = document.querySelector('ytmusic-like-button-renderer #button-shape-dislike button, ytmusic-like-button-renderer .dislike');
+                if (dislikeBtn) { dislikeBtn.click(); return 'clicked-dislike'; }
+
+                // Try alternative selector
+                const altDislikeBtn = document.querySelector('.ytmusic-player-bar ytmusic-like-button-renderer button[aria-label*="dislike" i]');
+                if (altDislikeBtn) { altDislikeBtn.click(); return 'clicked-alt-dislike'; }
+
+                return 'no-dislike-button';
+            })();
+        """
+        webView.evaluateJavaScript(script) { [weak self] result, error in
+            if let error {
+                self?.logger.error("clickDislikeButton error: \(error.localizedDescription)")
+            } else {
+                self?.logger.debug("clickDislikeButton result: \(String(describing: result))")
+            }
+        }
+    }
+
     // Observer script for playback state
     private static var observerScript: String {
         """
@@ -521,6 +577,15 @@ final class SingletonPlayerWebView {
                         thumbnailUrl = thumbEl.src || thumbEl.getAttribute('src') || '';
                     }
 
+                    // Extract like status from the like button renderer
+                    let likeStatus = 'INDIFFERENT';
+                    const likeRenderer = document.querySelector('ytmusic-like-button-renderer');
+                    if (likeRenderer) {
+                        const status = likeRenderer.getAttribute('like-status');
+                        if (status === 'LIKE') likeStatus = 'LIKE';
+                        else if (status === 'DISLIKE') likeStatus = 'DISLIKE';
+                    }
+
                     // Check if track changed
                     const trackChanged = (title !== lastTitle || artist !== lastArtist) && title !== '';
                     if (trackChanged) {
@@ -536,7 +601,8 @@ final class SingletonPlayerWebView {
                         title: title,
                         artist: artist,
                         thumbnailUrl: thumbnailUrl,
-                        trackChanged: trackChanged
+                        trackChanged: trackChanged,
+                        likeStatus: likeStatus
                     });
                 } catch (e) {}
             }
@@ -572,6 +638,17 @@ final class SingletonPlayerWebView {
             let artist = body["artist"] as? String ?? ""
             let thumbnailUrl = body["thumbnailUrl"] as? String ?? ""
             let trackChanged = body["trackChanged"] as? Bool ?? false
+            let likeStatusString = body["likeStatus"] as? String ?? "INDIFFERENT"
+
+            // Parse like status
+            let likeStatus: LikeStatus = switch likeStatusString {
+            case "LIKE":
+                .like
+            case "DISLIKE":
+                .dislike
+            default:
+                .indifferent
+            }
 
             Task { @MainActor in
                 self.playerService.updatePlaybackState(
@@ -579,6 +656,11 @@ final class SingletonPlayerWebView {
                     progress: Double(progress),
                     duration: Double(duration)
                 )
+
+                // Update like status only when track changes (initial state)
+                if trackChanged {
+                    self.playerService.updateLikeStatus(likeStatus)
+                }
 
                 // Update track metadata if track changed
                 if trackChanged, !title.isEmpty {

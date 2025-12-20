@@ -86,14 +86,23 @@ final class PlayerService: NSObject {
     /// After first successful playback, we can auto-play without showing the popup.
     private(set) var hasUserInteractedThisSession: Bool = false
 
+    /// Like status of the current track.
+    private(set) var currentTrackLikeStatus: LikeStatus = .indifferent
+
     // MARK: - Private Properties
 
     private let logger = DiagnosticsLogger.player
+    private var ytMusicClient: YTMusicClient?
 
     // MARK: - Initialization
 
     override init() {
         super.init()
+    }
+
+    /// Sets the YTMusicClient for API calls (dependency injection).
+    func setYTMusicClient(_ client: YTMusicClient) {
+        ytMusicClient = client
     }
 
     // MARK: - Public Methods
@@ -186,6 +195,9 @@ final class PlayerService: NSObject {
         // Preserve videoId if we have it
         let videoId = currentTrack?.videoId ?? pendingPlayVideoId ?? "unknown"
 
+        // Check if track actually changed
+        let trackChanged = currentTrack?.title != title || currentTrack?.artistsDisplay != artist
+
         currentTrack = Song(
             id: videoId,
             title: title,
@@ -195,6 +207,11 @@ final class PlayerService: NSObject {
             thumbnailURL: thumbnailURL,
             videoId: videoId
         )
+
+        // Reset like/library status when track changes
+        if trackChanged {
+            resetTrackStatus()
+        }
     }
 
     /// Toggles play/pause.
@@ -396,6 +413,64 @@ final class PlayerService: NSObject {
         if let song = songs[safe: safeIndex] {
             await play(song: song)
         }
+    }
+
+    // MARK: - Like/Dislike/Library Actions
+
+    /// Likes the current track (thumbs up).
+    func likeCurrentTrack() {
+        guard let track = currentTrack else { return }
+        logger.info("Liking current track: \(track.videoId)")
+
+        // Toggle: if already liked, remove the like
+        let newStatus: LikeStatus = currentTrackLikeStatus == .like ? .indifferent : .like
+        let previousStatus = currentTrackLikeStatus
+        currentTrackLikeStatus = newStatus
+
+        // Use API call for reliable rating
+        Task {
+            do {
+                try await ytMusicClient?.rateSong(videoId: track.videoId, rating: newStatus)
+                logger.info("Successfully rated song as \(newStatus.rawValue)")
+            } catch {
+                logger.error("Failed to rate song: \(error.localizedDescription)")
+                // Revert on failure
+                currentTrackLikeStatus = previousStatus
+            }
+        }
+    }
+
+    /// Dislikes the current track (thumbs down).
+    func dislikeCurrentTrack() {
+        guard let track = currentTrack else { return }
+        logger.info("Disliking current track: \(track.videoId)")
+
+        // Toggle: if already disliked, remove the dislike
+        let newStatus: LikeStatus = currentTrackLikeStatus == .dislike ? .indifferent : .dislike
+        let previousStatus = currentTrackLikeStatus
+        currentTrackLikeStatus = newStatus
+
+        // Use API call for reliable rating
+        Task {
+            do {
+                try await ytMusicClient?.rateSong(videoId: track.videoId, rating: newStatus)
+                logger.info("Successfully rated song as \(newStatus.rawValue)")
+            } catch {
+                logger.error("Failed to rate song: \(error.localizedDescription)")
+                // Revert on failure
+                currentTrackLikeStatus = previousStatus
+            }
+        }
+    }
+
+    /// Updates the like status from WebView observation.
+    func updateLikeStatus(_ status: LikeStatus) {
+        currentTrackLikeStatus = status
+    }
+
+    /// Resets like status when track changes.
+    private func resetTrackStatus() {
+        currentTrackLikeStatus = .indifferent
     }
 
     // MARK: - Private Methods

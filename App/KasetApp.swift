@@ -54,10 +54,15 @@ struct KasetApp: App {
         let auth = AuthService()
         let webkit = WebKitManager.shared
         let player = PlayerService()
+        let client = YTMusicClient(authService: auth, webKitManager: webkit)
+
+        // Wire up dependencies
+        player.setYTMusicClient(client)
+
         _authService = State(initialValue: auth)
         _webKitManager = State(initialValue: webkit)
         _playerService = State(initialValue: player)
-        _ytMusicClient = State(initialValue: YTMusicClient(authService: auth, webKitManager: webkit))
+        _ytMusicClient = State(initialValue: client)
         _notificationService = State(initialValue: NotificationService(playerService: player))
     }
 

@@ -267,6 +267,81 @@ struct SearchView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .contextMenu {
+            contextMenuItems(for: item)
+        }
+    }
+
+    @ViewBuilder
+    private func contextMenuItems(for item: SearchResultItem) -> some View {
+        switch item {
+        case let .song(song):
+            Button {
+                Task { await playerService.play(song: song) }
+            } label: {
+                Label("Play", systemImage: "play.fill")
+            }
+
+            Divider()
+
+            Button {
+                likeSong(song)
+            } label: {
+                Label("Like", systemImage: "hand.thumbsup")
+            }
+
+            Button {
+                dislikeSong(song)
+            } label: {
+                Label("Dislike", systemImage: "hand.thumbsdown")
+            }
+
+        case let .album(album):
+            EmptyView()
+
+        case let .artist(artist):
+            EmptyView()
+
+        case let .playlist(playlist):
+            Button {
+                addPlaylistToLibrary(playlist)
+            } label: {
+                Label("Add to Library", systemImage: "plus.circle")
+            }
+        }
+    }
+
+    // MARK: - Song Actions
+
+    private func likeSong(_ song: Song) {
+        Task {
+            await playerService.play(song: song)
+            try? await Task.sleep(for: .milliseconds(100))
+            playerService.likeCurrentTrack()
+        }
+    }
+
+    private func dislikeSong(_ song: Song) {
+        Task {
+            await playerService.play(song: song)
+            try? await Task.sleep(for: .milliseconds(100))
+            playerService.dislikeCurrentTrack()
+        }
+    }
+
+    private func addPlaylistToLibrary(_ playlist: Playlist) {
+        Task {
+            do {
+                try await viewModel.client.subscribeToPlaylist(playlistId: playlist.id)
+                // Update the shared library set so other views know this playlist is now in library
+                LibraryViewModel.shared?.addToLibrarySet(playlistId: playlist.id)
+                // Trigger a refresh of the library view
+                await LibraryViewModel.shared?.refresh()
+                DiagnosticsLogger.api.info("Added playlist to library: \(playlist.title)")
+            } catch {
+                DiagnosticsLogger.api.error("Failed to add playlist to library: \(error.localizedDescription)")
+            }
+        }
     }
 
     private func errorView(message: String) -> some View {

@@ -8,11 +8,11 @@
 
 /* Begin PBXBuildFile section */
 		0BC44ED1A1295E5FF52B74BA /* ArtistDetailViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = F525663B77A8906E1792B4EC /* ArtistDetailViewModel.swift */; };
-		E50000010000000000000064 /* ExploreViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = E50000020000000000000064 /* ExploreViewModel.swift */; };
-		E50000010000000000000091 /* ExploreView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E50000020000000000000091 /* ExploreView.swift */; };
 		3BF2AFA5B956EFD5403CD66D /* MiniPlayerWebView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5B735BB57DD2ACF165D683F /* MiniPlayerWebView.swift */; };
 		57F360B44102B28C4B273F9C /* ArtistDetail.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2D1A78D6AA4AB654E9663E2D /* ArtistDetail.swift */; };
 		69379B5363A7AFFDD1A0B9AE /* ArtistDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = ABDD39F01D95E657E26F9F05 /* ArtistDetailView.swift */; };
+		9C7360EB1739267D63B47516 /* LikeStatusTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9FE64758B3DD39AF3A632F34 /* LikeStatusTests.swift */; };
+		A50638AC6DFE30B5DE865C3F /* LikeStatus.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB5413F1B52FCC4A3B8DAA1E /* LikeStatus.swift */; };
 		E50000010000000000000000 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = E50000020000000000000000 /* AppDelegate.swift */; };
 		E50000010000000000000001 /* KasetApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = E50000020000000000000001 /* KasetApp.swift */; };
 		E50000010000000000000002 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = E50000020000000000000002 /* Assets.xcassets */; };
@@ -80,8 +80,10 @@
 
 /* Begin PBXFileReference section */
 		2D1A78D6AA4AB654E9663E2D /* ArtistDetail.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ArtistDetail.swift; sourceTree = "<group>"; };
+		9FE64758B3DD39AF3A632F34 /* LikeStatusTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = LikeStatusTests.swift; sourceTree = "<group>"; };
 		ABDD39F01D95E657E26F9F05 /* ArtistDetailView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ArtistDetailView.swift; sourceTree = "<group>"; };
 		B5B735BB57DD2ACF165D683F /* MiniPlayerWebView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MiniPlayerWebView.swift; sourceTree = "<group>"; };
+		BB5413F1B52FCC4A3B8DAA1E /* LikeStatus.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = LikeStatus.swift; sourceTree = "<group>"; };
 		E50000020000000000000000 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		E50000020000000000000001 /* KasetApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KasetApp.swift; sourceTree = "<group>"; };
 		E50000020000000000000002 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
@@ -229,6 +231,7 @@
 				E50000020000000000000016 /* SearchResponse.swift */,
 				E50000020000000000000017 /* HomeResponse.swift */,
 				2D1A78D6AA4AB654E9663E2D /* ArtistDetail.swift */,
+				BB5413F1B52FCC4A3B8DAA1E /* LikeStatus.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -349,6 +352,7 @@
 				E50000020000000000000110 /* RetryPolicyTests.swift */,
 				E50000020000000000000111 /* YTMusicErrorTests.swift */,
 				E50000020000000000000112 /* ArtistDetailTests.swift */,
+				9FE64758B3DD39AF3A632F34 /* LikeStatusTests.swift */,
 			);
 			path = KasetTests;
 			sourceTree = "<group>";
@@ -487,6 +491,7 @@
 				0BC44ED1A1295E5FF52B74BA /* ArtistDetailViewModel.swift in Sources */,
 				E50000010000000000000064 /* ExploreViewModel.swift in Sources */,
 				E50000010000000000000091 /* ExploreView.swift in Sources */,
+				A50638AC6DFE30B5DE865C3F /* LikeStatus.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -507,6 +512,7 @@
 				E50000010000000000000110 /* RetryPolicyTests.swift in Sources */,
 				E50000010000000000000111 /* YTMusicErrorTests.swift in Sources */,
 				E50000010000000000000112 /* ArtistDetailTests.swift in Sources */,
+				9C7360EB1739267D63B47516 /* LikeStatusTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

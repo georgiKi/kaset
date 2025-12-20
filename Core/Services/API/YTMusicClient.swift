@@ -236,6 +236,94 @@ final class YTMusicClient {
         return parseArtistDetail(data, artistId: id)
     }
 
+    // MARK: - Like/Library Actions
+
+    /// Rates a song (like/dislike/indifferent).
+    /// - Parameters:
+    ///   - videoId: The video ID of the song to rate
+    ///   - rating: The rating to apply (like, dislike, or indifferent to remove rating)
+    func rateSong(videoId: String, rating: LikeStatus) async throws {
+        logger.info("Rating song \(videoId) with \(rating.rawValue)")
+
+        let body: [String: Any] = [
+            "target": ["videoId": videoId],
+        ]
+
+        // Endpoint varies by rating type
+        let endpoint = switch rating {
+        case .like:
+            "like/like"
+        case .dislike:
+            "like/dislike"
+        case .indifferent:
+            "like/removelike"
+        }
+
+        _ = try await request(endpoint, body: body)
+        logger.info("Successfully rated song \(videoId)")
+
+        // Invalidate liked playlist cache so UI updates immediately
+        APICache.shared.invalidate(matching: "browse:")
+    }
+
+    /// Adds or removes a song from the user's library.
+    /// - Parameter feedbackTokens: Tokens obtained from song metadata (use add token to add, remove token to remove)
+    func editSongLibraryStatus(feedbackTokens: [String]) async throws {
+        guard !feedbackTokens.isEmpty else {
+            logger.warning("No feedback tokens provided for library edit")
+            return
+        }
+
+        logger.info("Editing song library status with \(feedbackTokens.count) tokens")
+
+        let body: [String: Any] = [
+            "feedbackTokens": feedbackTokens,
+        ]
+
+        _ = try await request("feedback", body: body)
+        logger.info("Successfully edited library status")
+    }
+
+    /// Adds a playlist to the user's library using the like/like endpoint.
+    /// This is equivalent to the "Add to Library" action in YouTube Music.
+    /// - Parameter playlistId: The playlist ID to add to library
+    func subscribeToPlaylist(playlistId: String) async throws {
+        logger.info("Adding playlist to library: \(playlistId)")
+
+        // Remove VL prefix if present for the API call
+        let cleanId = playlistId.hasPrefix("VL") ? String(playlistId.dropFirst(2)) : playlistId
+
+        let body: [String: Any] = [
+            "target": ["playlistId": cleanId],
+        ]
+
+        _ = try await request("like/like", body: body)
+        logger.info("Successfully added playlist \(playlistId) to library")
+
+        // Invalidate library cache so UI updates
+        APICache.shared.invalidate(matching: "browse:")
+    }
+
+    /// Removes a playlist from the user's library using the like/removelike endpoint.
+    /// This is equivalent to the "Remove from Library" action in YouTube Music.
+    /// - Parameter playlistId: The playlist ID to remove from library
+    func unsubscribeFromPlaylist(playlistId: String) async throws {
+        logger.info("Removing playlist from library: \(playlistId)")
+
+        // Remove VL prefix if present for the API call
+        let cleanId = playlistId.hasPrefix("VL") ? String(playlistId.dropFirst(2)) : playlistId
+
+        let body: [String: Any] = [
+            "target": ["playlistId": cleanId],
+        ]
+
+        _ = try await request("like/removelike", body: body)
+        logger.info("Successfully removed playlist \(playlistId) from library")
+
+        // Invalidate library cache so UI updates
+        APICache.shared.invalidate(matching: "browse:")
+    }
+
     // MARK: - Private Methods
 
     /// Builds authentication headers for API requests.

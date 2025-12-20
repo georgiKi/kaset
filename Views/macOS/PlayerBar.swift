@@ -225,7 +225,14 @@ struct PlayerBar: View {
     // MARK: - Volume Control
 
     private var volumeControl: some View {
-        HStack(spacing: 6) {
+        HStack(spacing: 8) {
+            // Like/Dislike/Library actions
+            actionButtons
+
+            Divider()
+                .frame(height: 20)
+                .padding(.horizontal, 4)
+
             Image(systemName: volumeIcon)
                 .font(.system(size: 12, weight: .medium))
                 .foregroundStyle(.primary.opacity(0.6))
@@ -244,6 +251,42 @@ struct PlayerBar: View {
             )
             .frame(width: 80)
             .controlSize(.small)
+        }
+    }
+
+    // MARK: - Action Buttons (Like/Dislike)
+
+    private var actionButtons: some View {
+        HStack(spacing: 12) {
+            // Dislike button
+            Button {
+                playerService.dislikeCurrentTrack()
+            } label: {
+                Image(systemName: playerService.currentTrackLikeStatus == .dislike
+                    ? "hand.thumbsdown.fill"
+                    : "hand.thumbsdown")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(playerService.currentTrackLikeStatus == .dislike ? .red : .primary.opacity(0.6))
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Dislike")
+            .accessibilityValue(playerService.currentTrackLikeStatus == .dislike ? "Disliked" : "Not disliked")
+            .disabled(playerService.currentTrack == nil)
+
+            // Like button
+            Button {
+                playerService.likeCurrentTrack()
+            } label: {
+                Image(systemName: playerService.currentTrackLikeStatus == .like
+                    ? "hand.thumbsup.fill"
+                    : "hand.thumbsup")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(playerService.currentTrackLikeStatus == .like ? .red : .primary.opacity(0.6))
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Like")
+            .accessibilityValue(playerService.currentTrackLikeStatus == .like ? "Liked" : "Not liked")
+            .disabled(playerService.currentTrack == nil)
         }
     }
 

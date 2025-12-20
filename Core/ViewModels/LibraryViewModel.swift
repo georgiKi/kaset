@@ -6,6 +6,9 @@ import os
 @MainActor
 @Observable
 final class LibraryViewModel {
+    /// Shared instance for checking library status from other views.
+    static var shared: LibraryViewModel?
+
     /// Loading states for the view.
     enum LoadingState: Equatable, Sendable {
         case idle
@@ -20,6 +23,9 @@ final class LibraryViewModel {
     /// User's playlists.
     private(set) var playlists: [Playlist] = []
 
+    /// Set of playlist IDs that are in the user's library (for quick lookup).
+    private(set) var libraryPlaylistIds: Set<String> = []
+
     /// Selected playlist detail.
     private(set) var selectedPlaylistDetail: PlaylistDetail?
 
@@ -32,6 +38,34 @@ final class LibraryViewModel {
 
     init(client: YTMusicClient) {
         self.client = client
+        // Set shared instance for global access
+        LibraryViewModel.shared = self
+    }
+
+    /// Checks if a playlist is in the user's library.
+    func isInLibrary(playlistId: String) -> Bool {
+        // Normalize the ID for comparison (remove VL prefix if present)
+        let normalizedId = playlistId.hasPrefix("VL") ? String(playlistId.dropFirst(2)) : playlistId
+        return libraryPlaylistIds.contains { storedId in
+            let normalizedStoredId = storedId.hasPrefix("VL") ? String(storedId.dropFirst(2)) : storedId
+            return normalizedId == normalizedStoredId || playlistId == storedId
+        }
+    }
+
+    /// Adds a playlist ID to the library set (called after successful add to library).
+    func addToLibrarySet(playlistId: String) {
+        libraryPlaylistIds.insert(playlistId)
+    }
+
+    /// Removes a playlist ID from the library set (called after successful remove from library).
+    func removeFromLibrarySet(playlistId: String) {
+        // Remove both the exact ID and normalized versions
+        libraryPlaylistIds.remove(playlistId)
+        let normalizedId = playlistId.hasPrefix("VL") ? String(playlistId.dropFirst(2)) : playlistId
+        libraryPlaylistIds = libraryPlaylistIds.filter { storedId in
+            let normalizedStoredId = storedId.hasPrefix("VL") ? String(storedId.dropFirst(2)) : storedId
+            return normalizedId != normalizedStoredId
+        }
     }
 
     /// Loads library playlists.
@@ -44,6 +78,8 @@ final class LibraryViewModel {
         do {
             let loadedPlaylists = try await client.getLibraryPlaylists()
             playlists = loadedPlaylists
+            // Update the set of library playlist IDs for quick lookup
+            libraryPlaylistIds = Set(loadedPlaylists.map(\.id))
             loadingState = .loaded
             logger.info("Loaded \(loadedPlaylists.count) playlists")
         } catch {

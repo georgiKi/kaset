@@ -30,6 +30,10 @@ jobs:
       - name: Show Xcode version
         run: xcodebuild -version
 
+      - name: Get short SHA
+        id: slug
+        run: echo "sha_short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+
       - name: Build app
         run: |
           xcodebuild -project Kaset.xcodeproj \
@@ -39,7 +43,9 @@ jobs:
             -destination 'platform=macOS' \
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGNING_ALLOWED=NO
+            CODE_SIGNING_ALLOWED=NO \
+            MARKETING_VERSION="0.0.0-dev.${{ steps.slug.outputs.sha_short }}" \
+            CURRENT_PROJECT_VERSION="${{ github.run_number }}"
 
       - name: Create DMG
         run: |
@@ -62,10 +68,6 @@ jobs:
             -srcfolder dmg_contents \
             -ov -format UDZO \
             kaset-dev.dmg
-
-      - name: Get short SHA
-        id: slug
-        run: echo "sha_short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
 
       - name: Upload DMG
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v4

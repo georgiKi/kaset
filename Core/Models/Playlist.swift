@@ -11,6 +11,12 @@ struct Playlist: Identifiable, Codable, Hashable, Sendable {
     let trackCount: Int?
     let author: String?
 
+    /// Whether this is an album (vs a playlist).
+    /// Albums have IDs starting with "OLAK" or "MPRE".
+    var isAlbum: Bool {
+        id.hasPrefix("OLAK") || id.hasPrefix("MPRE")
+    }
+
     /// Display string for track count.
     var trackCountDisplay: String {
         guard let count = trackCount else { return "" }
@@ -72,6 +78,12 @@ struct PlaylistDetail: Identifiable, Sendable {
     let author: String?
     let tracks: [Song]
     let duration: String?
+
+    /// Whether this is an album (vs a playlist).
+    /// Albums have IDs starting with "OLAK" or "MPRE".
+    var isAlbum: Bool {
+        id.hasPrefix("OLAK") || id.hasPrefix("MPRE")
+    }
 
     init(playlist: Playlist, tracks: [Song], duration: String? = nil) {
         id = playlist.id

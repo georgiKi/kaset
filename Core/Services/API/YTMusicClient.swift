@@ -40,7 +40,7 @@ final class YTMusicClient {
             "browseId": "FEmusic_home",
         ]
 
-        let data = try await request("browse", body: body)
+        let data = try await request("browse", body: body, ttl: APICache.TTL.home)
         var response = parseHomeResponse(data)
 
         // Fetch continuation sections if available
@@ -138,7 +138,7 @@ final class YTMusicClient {
             "query": query,
         ]
 
-        let data = try await request("search", body: body)
+        let data = try await request("search", body: body, ttl: APICache.TTL.search)
         return parseSearchResponse(data)
     }
 
@@ -176,7 +176,7 @@ final class YTMusicClient {
             "browseId": browseId,
         ]
 
-        let data = try await request("browse", body: body)
+        let data = try await request("browse", body: body, ttl: APICache.TTL.playlist)
 
         // Log top-level keys for debugging
         let topKeys = Array(data.keys)
@@ -193,7 +193,7 @@ final class YTMusicClient {
             "browseId": id,
         ]
 
-        let data = try await request("browse", body: body)
+        let data = try await request("browse", body: body, ttl: APICache.TTL.artist)
 
         let topKeys = Array(data.keys)
         logger.debug("Artist response top-level keys: \(topKeys)")
@@ -258,8 +258,32 @@ final class YTMusicClient {
         ]
     }
 
-    /// Makes an authenticated request to the API.
-    private func request(_ endpoint: String, body: [String: Any]) async throws -> [String: Any] {
+    /// Makes an authenticated request to the API with optional caching and retry.
+    private func request(_ endpoint: String, body: [String: Any], ttl: TimeInterval? = nil) async throws -> [String: Any] {
+        // Generate cache key from endpoint and body
+        let cacheKey = "\(endpoint):\(body.description.hashValue)"
+
+        // Check cache first
+        if ttl != nil, let cached = APICache.shared.get(key: cacheKey) {
+            logger.debug("Cache hit for \(endpoint)")
+            return cached
+        }
+
+        // Execute with retry policy
+        let json = try await RetryPolicy.default.execute { [self] in
+            try await performRequest(endpoint, body: body)
+        }
+
+        // Cache response if TTL specified
+        if let ttl {
+            APICache.shared.set(key: cacheKey, data: json, ttl: ttl)
+        }
+
+        return json
+    }
+
+    /// Performs the actual network request.
+    private func performRequest(_ endpoint: String, body: [String: Any]) async throws -> [String: Any] {
         let urlString = "\(Self.baseURL)/\(endpoint)?key=\(Self.apiKey)&prettyPrint=false"
         guard let url = URL(string: urlString) else {
             throw YTMusicError.unknown(message: "Invalid URL: \(urlString)")

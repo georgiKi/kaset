@@ -17,4 +17,7 @@ enum DiagnosticsLogger {
 
     /// Logger for UI-related events.
     static let ui = Logger(subsystem: "com.sertacozercan.Kaset", category: "UI")
+
+    /// Logger for notification-related events.
+    static let notification = Logger(subsystem: "com.sertacozercan.Kaset", category: "Notification")
 }

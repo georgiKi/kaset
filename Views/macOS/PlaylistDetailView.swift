@@ -56,7 +56,7 @@ struct PlaylistDetailView: View {
                 Divider()
 
                 // Tracks
-                tracksView(detail.tracks)
+                tracksView(detail.tracks, isAlbum: detail.isAlbum)
             }
             .padding(24)
         }
@@ -83,7 +83,7 @@ struct PlaylistDetailView: View {
 
             // Info
             VStack(alignment: .leading, spacing: 8) {
-                Text("Playlist")
+                Text(detail.isAlbum ? "Album" : "Playlist")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .textCase(.uppercase)
@@ -129,20 +129,22 @@ struct PlaylistDetailView: View {
         }
     }
 
-    private func tracksView(_ tracks: [Song]) -> some View {
+    private func tracksView(_ tracks: [Song], isAlbum: Bool) -> some View {
         VStack(spacing: 0) {
             ForEach(Array(tracks.enumerated()), id: \.element.id) { index, track in
-                trackRow(track, index: index, tracks: tracks)
+                trackRow(track, index: index, tracks: tracks, isAlbum: isAlbum)
 
                 if index < tracks.count - 1 {
                     Divider()
-                        .padding(.leading, 96) // 28 (index) + 12 (spacing) + 40 (thumbnail) + 16 (spacing)
+                        // For albums: 28 (index) + 12 (spacing)
+                        // For playlists: 28 (index) + 12 (spacing) + 40 (thumbnail) + 16 (spacing)
+                        .padding(.leading, isAlbum ? 40 : 96)
                 }
             }
         }
     }
 
-    private func trackRow(_ track: Song, index: Int, tracks: [Song]) -> some View {
+    private func trackRow(_ track: Song, index: Int, tracks: [Song], isAlbum: Bool) -> some View {
         Button {
             playTrackInQueue(tracks: tracks, startingAt: index)
         } label: {
@@ -153,17 +155,20 @@ struct PlaylistDetailView: View {
                     .foregroundStyle(.secondary)
                     .frame(width: 28, alignment: .trailing)
 
-                // Thumbnail - playlists have different album art per track
-                AsyncImage(url: track.thumbnailURL) { image in
-                    image
-                        .resizable()
-                        .aspectRatio(contentMode: .fill)
-                } placeholder: {
-                    Rectangle()
-                        .fill(.quaternary)
+                // Thumbnail - only show for playlists (different album art per track)
+                // Albums share the same artwork, so we hide per-track thumbnails
+                if !isAlbum {
+                    AsyncImage(url: track.thumbnailURL) { image in
+                        image
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                    } placeholder: {
+                        Rectangle()
+                            .fill(.quaternary)
+                    }
+                    .frame(width: 40, height: 40)
+                    .clipShape(.rect(cornerRadius: 4))
                 }
-                .frame(width: 40, height: 40)
-                .clipShape(.rect(cornerRadius: 4))
 
                 // Title and artist
                 VStack(alignment: .leading, spacing: 2) {

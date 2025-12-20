@@ -6,9 +6,10 @@ import WebKit
 /// A visible WebView that displays the YouTube Music player.
 /// This is required because YouTube Music won't initialize the video player
 /// without user interaction - autoplay is blocked in hidden WebViews.
-/// The WebView is stored in AppDelegate for persistence after the view is dismissed.
+/// Uses SingletonPlayerWebView for the actual WebView instance.
 struct MiniPlayerWebView: NSViewRepresentable {
     @Environment(WebKitManager.self) private var webKitManager
+    @Environment(PlayerService.self) private var playerService
 
     /// The video ID to play.
     let videoId: String
@@ -32,82 +33,36 @@ struct MiniPlayerWebView: NSViewRepresentable {
     }
 
     func makeNSView(context: Context) -> NSView {
-        // Create a container view - this will be destroyed when toast is dismissed,
-        // but the WebView inside will be reparented to the persistent container
         let container = NSView(frame: .zero)
         container.wantsLayer = true
 
-        // Get or create the WebView
-        let webView: WKWebView
-        if let appDelegate = NSApplication.shared.delegate as? AppDelegate,
-           let existingWebView = appDelegate.webView
-        {
-            // Reuse existing WebView - just reparent it
-            existingWebView.removeFromSuperview()
-            webView = existingWebView
+        // Get or create the singleton WebView
+        let webView = SingletonPlayerWebView.shared.getWebView(
+            webKitManager: webKitManager,
+            playerService: playerService
+        )
 
-            // Load new video if different
-            if appDelegate.currentVideoId != videoId {
-                let url = URL(string: "https://music.youtube.com/watch?v=\(videoId)")!
-                webView.load(URLRequest(url: url))
-                appDelegate.storeWebView(webView, videoId: videoId)
-            }
-        } else {
-            // Create new WebView
-            let configuration = webKitManager.createWebViewConfiguration()
+        // Add additional message handler for this view's callbacks
+        webView.configuration.userContentController.add(context.coordinator, name: "miniPlayer")
 
-            // Add script message handler
-            configuration.userContentController.add(context.coordinator, name: "miniPlayer")
+        // Ensure WebView is in this container
+        SingletonPlayerWebView.shared.ensureInHierarchy(container: container)
 
-            // Inject our observer script
-            let script = WKUserScript(
-                source: Self.observerScript,
-                injectionTime: .atDocumentEnd,
-                forMainFrameOnly: true
-            )
-            configuration.userContentController.addUserScript(script)
-
-            webView = WKWebView(frame: .zero, configuration: configuration)
-            webView.navigationDelegate = context.coordinator
-            webView.customUserAgent = WebKitManager.userAgent
-
-            #if DEBUG
-                webView.isInspectable = true
-            #endif
-
-            // Store in AppDelegate for persistence
-            if let appDelegate = NSApplication.shared.delegate as? AppDelegate {
-                appDelegate.storeWebView(webView, videoId: videoId)
-            }
-
-            // Load the watch page
-            let url = URL(string: "https://music.youtube.com/watch?v=\(videoId)")!
-            webView.load(URLRequest(url: url))
-        }
-
-        // Add WebView to container
-        webView.frame = container.bounds
-        webView.autoresizingMask = [.width, .height]
-        container.addSubview(webView)
+        // Load the video if needed
+        SingletonPlayerWebView.shared.loadVideo(videoId: videoId)
 
         return container
     }
 
     func updateNSView(_ container: NSView, context _: Context) {
         // Update WebView frame if needed
-        if let webView = container.subviews.first as? WKWebView {
-            webView.frame = container.bounds
-        }
+        SingletonPlayerWebView.shared.ensureInHierarchy(container: container)
     }
 
-    static func dismantleNSView(_ container: NSView, coordinator _: Coordinator) {
-        // When this container is removed, the WebView needs to be reparented
-        // to the persistent container. Just remove it from this container -
-        // PersistentWebViewContainer will reclaim it.
-        if let webView = container.subviews.first as? WKWebView {
-            webView.removeFromSuperview()
-            // The WebView is still held by AppDelegate, so it won't be deallocated
-        }
+    static func dismantleNSView(_: NSView, coordinator _: Coordinator) {
+        // WebView is managed by SingletonPlayerWebView.shared - it persists
+        // Remove the message handler to avoid duplicate handlers
+        SingletonPlayerWebView.shared.webView?.configuration.userContentController.removeScriptMessageHandler(forName: "miniPlayer")
     }
 
     // MARK: - Observer Script
@@ -242,144 +197,6 @@ struct MiniPlayerWebView: NSViewRepresentable {
     }
 }
 
-// MARK: - PersistentPlayerWebView
-
-/// A WebView that stays in the view hierarchy to keep audio playing.
-/// This is hidden (1x1 pixel, opacity 0) but remains active.
-struct PersistentPlayerWebView: NSViewRepresentable {
-    @Environment(WebKitManager.self) private var webKitManager
-    @Environment(PlayerService.self) private var playerService
-
-    let videoId: String
-
-    func makeCoordinator() -> Coordinator {
-        Coordinator(playerService: playerService)
-    }
-
-    func makeNSView(context: Context) -> WKWebView {
-        let configuration = webKitManager.createWebViewConfiguration()
-
-        // Add script message handler for state updates
-        configuration.userContentController.add(context.coordinator, name: "persistentPlayer")
-
-        // Inject observer script
-        let script = WKUserScript(
-            source: Self.observerScript,
-            injectionTime: .atDocumentEnd,
-            forMainFrameOnly: true
-        )
-        configuration.userContentController.addUserScript(script)
-
-        let webView = WKWebView(frame: CGRect(x: 0, y: 0, width: 1, height: 1), configuration: configuration)
-        webView.navigationDelegate = context.coordinator
-        webView.customUserAgent = WebKitManager.userAgent
-
-        // Store reference in coordinator for later use
-        context.coordinator.webView = webView
-
-        // Load the watch page
-        let url = URL(string: "https://music.youtube.com/watch?v=\(videoId)")!
-        webView.load(URLRequest(url: url))
-
-        return webView
-    }
-
-    func updateNSView(_ webView: WKWebView, context _: Context) {
-        // Check if we need to load a new video
-        if let currentURL = webView.url,
-           !currentURL.absoluteString.contains(videoId)
-        {
-            let url = URL(string: "https://music.youtube.com/watch?v=\(videoId)")!
-            webView.load(URLRequest(url: url))
-        }
-    }
-
-    // Script to observe playback state
-    private static var observerScript: String {
-        """
-        (function() {
-            'use strict';
-            const bridge = window.webkit.messageHandlers.persistentPlayer;
-
-            function waitForPlayerBar() {
-                const playerBar = document.querySelector('ytmusic-player-bar');
-                if (playerBar) {
-                    setupObserver(playerBar);
-                    return;
-                }
-                setTimeout(waitForPlayerBar, 500);
-            }
-
-            function setupObserver(playerBar) {
-                const observer = new MutationObserver(sendUpdate);
-                observer.observe(playerBar, {
-                    attributes: true, characterData: true,
-                    childList: true, subtree: true
-                });
-                sendUpdate();
-                setInterval(sendUpdate, 1000);
-            }
-
-            function sendUpdate() {
-                try {
-                    const titleEl = document.querySelector('.ytmusic-player-bar.title');
-                    const artistEl = document.querySelector('.ytmusic-player-bar.byline');
-                    const progressBar = document.querySelector('#progress-bar');
-                    const playPauseBtn = document.querySelector('.play-pause-button.ytmusic-player-bar');
-
-                    const isPlaying = playPauseBtn ?
-                        (playPauseBtn.getAttribute('title') === 'Pause' ||
-                         playPauseBtn.getAttribute('aria-label') === 'Pause') : false;
-
-                    bridge.postMessage({
-                        type: 'STATE_UPDATE',
-                        title: titleEl ? titleEl.textContent : '',
-                        artist: artistEl ? artistEl.textContent : '',
-                        progress: progressBar ? parseInt(progressBar.getAttribute('value') || '0') : 0,
-                        duration: progressBar ? parseInt(progressBar.getAttribute('aria-valuemax') || '0') : 0,
-                        isPlaying: isPlaying
-                    });
-                } catch (e) {}
-            }
-
-            if (document.readyState === 'loading') {
-                document.addEventListener('DOMContentLoaded', waitForPlayerBar);
-            } else {
-                waitForPlayerBar();
-            }
-        })();
-        """
-    }
-
-    class Coordinator: NSObject, WKNavigationDelegate, WKScriptMessageHandler {
-        weak var webView: WKWebView?
-        let playerService: PlayerService
-
-        init(playerService: PlayerService) {
-            self.playerService = playerService
-        }
-
-        func userContentController(_: WKUserContentController, didReceive message: WKScriptMessage) {
-            guard let body = message.body as? [String: Any],
-                  let type = body["type"] as? String,
-                  type == "STATE_UPDATE"
-            else { return }
-
-            let isPlaying = body["isPlaying"] as? Bool ?? false
-            let progress = body["progress"] as? Int ?? 0
-            let duration = body["duration"] as? Int ?? 0
-
-            Task { @MainActor in
-                if isPlaying {
-                    self.playerService.updatePlaybackState(isPlaying: true, progress: Double(progress), duration: Double(duration))
-                } else {
-                    self.playerService.updatePlaybackState(isPlaying: false, progress: Double(progress), duration: Double(duration))
-                }
-            }
-        }
-    }
-}
-
 // MARK: - CompactPlayToast
 
 /// A very small, unobtrusive toast that appears to let the user start playback.
@@ -429,123 +246,6 @@ struct CompactPlayToast: View {
         .frame(width: 160, height: 90)
         .clipShape(RoundedRectangle(cornerRadius: 6))
         .shadow(color: .black.opacity(0.2), radius: 8, y: 4)
-    }
-}
-
-// MARK: - AppDelegateWebViewWrapper
-
-/// Wraps the AppDelegate's persistent WebView for display in SwiftUI.
-/// Used in the toast popup to show the WebView for user interaction.
-struct AppDelegateWebViewWrapper: NSViewRepresentable {
-    let videoId: String
-    let playerService: PlayerService
-    let webKitManager: WebKitManager
-
-    func makeNSView(context _: Context) -> NSView {
-        let container = NSView()
-
-        // Get the WebView from AppDelegate (should already exist from PersistentWebViewContainer)
-        if let appDelegate = NSApplication.shared.delegate as? AppDelegate,
-           let webView = appDelegate.webView
-        {
-            // Temporarily reparent the webView to this container for display
-            webView.removeFromSuperview()
-            webView.frame = container.bounds
-            webView.autoresizingMask = [.width, .height]
-            container.addSubview(webView)
-        }
-
-        return container
-    }
-
-    func updateNSView(_ nsView: NSView, context _: Context) {
-        // Update WebView frame if needed
-        if let webView = nsView.subviews.first {
-            webView.frame = nsView.bounds
-        }
-    }
-
-    static func dismantleNSView(_: NSView, coordinator _: ()) {
-        // When this view is removed, move the WebView back to the persistent container
-        if let appDelegate = NSApplication.shared.delegate as? AppDelegate,
-           let webView = appDelegate.webView
-        {
-            // The PersistentWebViewContainer will reclaim it
-            webView.removeFromSuperview()
-        }
-    }
-}
-
-// MARK: - PersistentWebViewContainer
-
-/// A hidden container that keeps the AppDelegate's WebView in the view hierarchy.
-/// The WebView must stay in a window's view hierarchy for audio playback to work.
-struct PersistentWebViewContainer: NSViewRepresentable {
-    func makeCoordinator() -> Coordinator {
-        Coordinator()
-    }
-
-    func makeNSView(context: Context) -> NSView {
-        let container = NSView(frame: CGRect(x: 0, y: 0, width: 1, height: 1))
-        context.coordinator.container = container
-
-        // Claim the WebView if it exists and isn't shown elsewhere
-        reclaimWebViewIfNeeded(into: container)
-
-        // Start a timer to periodically check if we need to reclaim the WebView
-        context.coordinator.startTimer()
-
-        return container
-    }
-
-    func updateNSView(_ nsView: NSView, context _: Context) {
-        reclaimWebViewIfNeeded(into: nsView)
-    }
-
-    static func dismantleNSView(_: NSView, coordinator: Coordinator) {
-        coordinator.stopTimer()
-    }
-
-    private func reclaimWebViewIfNeeded(into container: NSView) {
-        if let appDelegate = NSApplication.shared.delegate as? AppDelegate,
-           let webView = appDelegate.webView,
-           webView.superview == nil
-        {
-            webView.frame = container.bounds
-            container.addSubview(webView)
-        }
-    }
-
-    @MainActor
-    class Coordinator {
-        weak var container: NSView?
-        private var timer: Timer?
-
-        func startTimer() {
-            // Check every 100ms if we need to reclaim the WebView
-            timer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
-                Task { @MainActor in
-                    self?.checkAndReclaim()
-                }
-            }
-        }
-
-        func stopTimer() {
-            timer?.invalidate()
-            timer = nil
-        }
-
-        private func checkAndReclaim() {
-            guard let container else { return }
-
-            if let appDelegate = NSApplication.shared.delegate as? AppDelegate,
-               let webView = appDelegate.webView,
-               webView.superview == nil
-            {
-                webView.frame = container.bounds
-                container.addSubview(webView)
-            }
-        }
     }
 }
 
@@ -601,6 +301,15 @@ final class SingletonPlayerWebView {
 
         webView = newWebView
         return newWebView
+    }
+
+    /// Ensures the WebView is in the given container's view hierarchy.
+    func ensureInHierarchy(container: NSView) {
+        guard let webView, webView.superview !== container else { return }
+        webView.removeFromSuperview()
+        webView.frame = container.bounds
+        webView.autoresizingMask = [.width, .height]
+        container.addSubview(webView)
     }
 
     /// Load a video, stopping any currently playing audio first.

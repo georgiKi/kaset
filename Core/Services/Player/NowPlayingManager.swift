@@ -11,7 +11,7 @@ final class NowPlayingManager {
     private let playerService: PlayerService
     private let logger = DiagnosticsLogger.player
     private var observationTask: Task<Void, Never>?
-    private var artworkCache: [URL: NSImage] = [:]
+    private var artworkCache: [URL: CGImage] = [:]
 
     init(playerService: PlayerService) {
         self.playerService = playerService
@@ -123,15 +123,27 @@ final class NowPlayingManager {
             nowPlayingInfo[MPMediaItemPropertyAlbumTitle] = album.title
         }
 
-        MPNowPlayingInfoCenter.default().nowPlayingInfo = nowPlayingInfo
+        // Note: Artwork disabled due to thread-safety issues with MPMediaItemArtwork closure
+        // The closure is called on a background thread and NSImage is not thread-safe
 
-        // Note: Artwork fetching disabled due to threading issues with MPMediaItemArtwork
-        // The closure passed to MPMediaItemArtwork is called on a background thread,
-        // and NSImage is not thread-safe. Would need to convert to CGImage first.
+        MPNowPlayingInfoCenter.default().nowPlayingInfo = nowPlayingInfo
     }
 
-    private func fetchAndSetArtwork(from _: URL) async {
-        // Disabled - MPMediaItemArtwork's image provider closure is called on background
-        // threads, causing crashes with NSImage. Would need CGImage-based solution.
+    private func fetchArtwork(from url: URL) async {
+        do {
+            let (data, _) = try await URLSession.shared.data(from: url)
+            guard let nsImage = NSImage(data: data),
+                  let cgImage = nsImage.cgImage(forProposedRect: nil, context: nil, hints: nil)
+            else { return }
+
+            await MainActor.run {
+                artworkCache[url] = cgImage
+                updateNowPlayingInfo()
+            }
+        } catch {
+            await MainActor.run {
+                logger.debug("Failed to fetch artwork: \(error.localizedDescription)")
+            }
+        }
     }
 }

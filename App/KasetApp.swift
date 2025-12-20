@@ -12,13 +12,17 @@ struct KasetApp: App {
     @State private var webKitManager = WebKitManager.shared
     @State private var playerService = PlayerService()
     @State private var ytMusicClient: YTMusicClient?
+    @State private var notificationService: NotificationService?
 
     init() {
         let auth = AuthService()
         let webkit = WebKitManager.shared
+        let player = PlayerService()
         _authService = State(initialValue: auth)
         _webKitManager = State(initialValue: webkit)
+        _playerService = State(initialValue: player)
         _ytMusicClient = State(initialValue: YTMusicClient(authService: auth, webKitManager: webkit))
+        _notificationService = State(initialValue: NotificationService(playerService: player))
     }
 
     var body: some Scene {

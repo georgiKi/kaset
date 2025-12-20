@@ -77,7 +77,7 @@ struct MainWindow: View {
         }
         .onChange(of: playerService.isPlaying) { _, isPlaying in
             // Auto-hide the WebView once playback starts
-            if isPlaying && playerService.showMiniPlayer {
+            if isPlaying, playerService.showMiniPlayer {
                 playerService.confirmPlaybackStarted()
             }
         }

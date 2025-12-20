@@ -6,6 +6,8 @@ struct PlayerBar: View {
     @Environment(PlayerService.self) private var playerService
     @Environment(WebKitManager.self) private var webKitManager
 
+    @State private var isHovering = false
+
     var body: some View {
         GlassEffectContainer(spacing: 0) {
             HStack(spacing: 0) {
@@ -14,7 +16,7 @@ struct PlayerBar: View {
 
                 Spacer()
 
-                // Center section: Thumbnail + Now playing info
+                // Center section: Track info OR seek bar (on hover)
                 centerSection
 
                 Spacer()
@@ -29,6 +31,106 @@ struct PlayerBar: View {
         }
         .padding(.horizontal, 16)
         .padding(.bottom, 12)
+        .onHover { hovering in
+            withAnimation(.easeInOut(duration: 0.15)) {
+                isHovering = hovering
+            }
+        }
+    }
+
+    // MARK: - Center Section (track info blurs, seek bar appears on hover)
+
+    private var centerSection: some View {
+        ZStack {
+            // Track info (blurred when hovering)
+            trackInfoView
+                .blur(radius: isHovering ? 8 : 0)
+                .opacity(isHovering ? 0 : 1)
+
+            // Seek bar (shown when hovering)
+            if isHovering {
+                seekBarView
+                    .transition(.opacity)
+            }
+        }
+        .frame(maxWidth: 400)
+    }
+
+    // MARK: - Track Info View
+
+    private var trackInfoView: some View {
+        HStack(spacing: 10) {
+            // Thumbnail
+            CachedAsyncImage(url: playerService.currentTrack?.thumbnailURL?.highQualityThumbnailURL) { image in
+                image
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+            } placeholder: {
+                RoundedRectangle(cornerRadius: 4)
+                    .fill(.quaternary)
+                    .overlay {
+                        Image(systemName: "music.note")
+                            .font(.system(size: 12))
+                            .foregroundStyle(.secondary)
+                    }
+            }
+            .frame(width: 36, height: 36)
+            .clipShape(RoundedRectangle(cornerRadius: 4))
+
+            // Track info
+            if let track = playerService.currentTrack {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(track.title)
+                        .font(.system(size: 12, weight: .medium))
+                        .lineLimit(1)
+                        .foregroundStyle(.primary)
+
+                    Text(track.artistsDisplay.isEmpty ? "Unknown Artist" : track.artistsDisplay)
+                        .font(.system(size: 10))
+                        .lineLimit(1)
+                        .foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: 200, alignment: .leading)
+            }
+        }
+    }
+
+    // MARK: - Seek Bar View (replaces track info on hover)
+
+    private var seekBarView: some View {
+        HStack(spacing: 10) {
+            // Elapsed time
+            Text(formatTime(playerService.progress))
+                .font(.system(size: 11, design: .monospaced))
+                .foregroundStyle(.secondary)
+                .frame(width: 40, alignment: .trailing)
+
+            // Seek slider
+            Slider(
+                value: Binding(
+                    get: { playerService.duration > 0 ? playerService.progress / playerService.duration : 0 },
+                    set: { newValue in
+                        let seekTime = newValue * playerService.duration
+                        Task { await playerService.seek(to: seekTime) }
+                    }
+                ),
+                in: 0 ... 1
+            )
+            .controlSize(.small)
+
+            // Remaining time
+            Text("-\(formatTime(playerService.duration - playerService.progress))")
+                .font(.system(size: 11, design: .monospaced))
+                .foregroundStyle(.secondary)
+                .frame(width: 40, alignment: .leading)
+        }
+    }
+
+    private func formatTime(_ seconds: TimeInterval) -> String {
+        guard seconds.isFinite, seconds >= 0 else { return "0:00" }
+        let mins = Int(seconds) / 60
+        let secs = Int(seconds) % 60
+        return String(format: "%d:%02d", mins, secs)
     }
 
     // MARK: - Playback Controls
@@ -73,45 +175,6 @@ struct PlayerBar: View {
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Next track")
-        }
-    }
-
-    // MARK: - Center Section
-
-    private var centerSection: some View {
-        HStack(spacing: 10) {
-            // Thumbnail
-            AsyncImage(url: playerService.currentTrack?.thumbnailURL?.highQualityThumbnailURL) { image in
-                image
-                    .resizable()
-                    .aspectRatio(contentMode: .fill)
-            } placeholder: {
-                RoundedRectangle(cornerRadius: 4)
-                    .fill(.quaternary)
-                    .overlay {
-                        Image(systemName: "music.note")
-                            .font(.system(size: 12))
-                            .foregroundStyle(.secondary)
-                    }
-            }
-            .frame(width: 36, height: 36)
-            .clipShape(RoundedRectangle(cornerRadius: 4))
-
-            // Track info
-            if let track = playerService.currentTrack {
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(track.title)
-                        .font(.system(size: 12, weight: .medium))
-                        .lineLimit(1)
-                        .foregroundStyle(.primary)
-
-                    Text(track.artistsDisplay.isEmpty ? "Unknown Artist" : track.artistsDisplay)
-                        .font(.system(size: 10))
-                        .lineLimit(1)
-                        .foregroundStyle(.secondary)
-                }
-                .frame(maxWidth: 200, alignment: .leading)
-            }
         }
     }
 

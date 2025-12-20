@@ -76,7 +76,17 @@ final class WebKitManager: NSObject {
     /// Retrieves the SAPISID cookie value used for authentication.
     func getSAPISID() async -> String? {
         let cookies = await getCookies(for: "youtube.com")
-        return cookies.first { $0.name == Self.authCookieName }?.value
+        let allCookies = await getAllCookies()
+        logger.debug("Checking for SAPISID - total cookies: \(allCookies.count), youtube.com cookies: \(cookies.count)")
+
+        let sapisid = cookies.first { $0.name == Self.authCookieName }?.value
+        if sapisid != nil {
+            logger.debug("Found \(Self.authCookieName) cookie")
+        } else {
+            let cookieNames = cookies.map { $0.name }.joined(separator: ", ")
+            logger.debug("No \(Self.authCookieName) found. Available cookies: \(cookieNames)")
+        }
+        return sapisid
     }
 
     /// Checks if the required authentication cookies exist.

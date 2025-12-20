@@ -43,18 +43,33 @@ final class AuthService: AuthServiceProtocol {
     }
 
     /// Checks if the user is logged in based on existing cookies.
+    /// Includes retry logic to handle WebKit cookie store lazy loading.
     func checkLoginStatus() async {
         logger.debug("Checking login status from cookies")
 
-        guard let sapisid = await webKitManager.getSAPISID() else {
-            logger.info("No SAPISID cookie found, user is logged out")
-            state = .loggedOut
-            return
+        // Retry a few times to handle WebKit cookie store lazy loading
+        // Cookies may not be immediately available on cold start
+        let maxAttempts = 3
+        let delayBetweenAttempts: Duration = .milliseconds(500)
+
+        for attempt in 1...maxAttempts {
+            logger.debug("Login check attempt \(attempt) of \(maxAttempts)")
+
+            if let sapisid = await webKitManager.getSAPISID() {
+                logger.info("Found SAPISID cookie on attempt \(attempt), user is logged in")
+                state = .loggedIn(sapisid: sapisid)
+                needsReauth = false
+                return
+            }
+
+            if attempt < maxAttempts {
+                logger.debug("No cookies found, waiting before retry...")
+                try? await Task.sleep(for: delayBetweenAttempts)
+            }
         }
 
-        logger.info("Found SAPISID cookie, user is logged in")
-        state = .loggedIn(sapisid: sapisid)
-        needsReauth = false
+        logger.info("No SAPISID cookie found after \(maxAttempts) attempts, user is logged out")
+        state = .loggedOut
     }
 
     /// Called when a session expires (e.g., 401/403 from API).

@@ -88,7 +88,24 @@ final class PlayerService: NSObject, PlayerServiceProtocol {
     private(set) var currentTrackFeedbackTokens: FeedbackTokens?
 
     /// Whether the lyrics panel is visible.
-    var showLyrics: Bool = false
+    var showLyrics: Bool = false {
+        didSet {
+            // Mutual exclusivity: opening lyrics closes queue
+            if self.showLyrics, self.showQueue {
+                self.showQueue = false
+            }
+        }
+    }
+
+    /// Whether the queue panel is visible.
+    var showQueue: Bool = false {
+        didSet {
+            // Mutual exclusivity: opening queue closes lyrics
+            if self.showQueue, self.showLyrics {
+                self.showLyrics = false
+            }
+        }
+    }
 
     // MARK: - Private Properties
 
@@ -429,6 +446,94 @@ final class PlayerService: NSObject, PlayerServiceProtocol {
         self.queue = songs
         self.currentIndex = safeIndex
         if let song = songs[safe: safeIndex] {
+            await self.play(song: song)
+        }
+    }
+
+    /// Plays a song and fetches similar songs (radio queue) in the background.
+    /// The queue will be populated with similar songs from YouTube Music's radio feature.
+    func playWithRadio(song: Song) async {
+        self.logger.info("Playing with radio: \(song.title)")
+
+        // Start with just this song in the queue
+        self.queue = [song]
+        self.currentIndex = 0
+        await self.play(song: song)
+
+        // Fetch radio queue in background
+        await self.fetchAndApplyRadioQueue(for: song.videoId)
+    }
+
+    /// Fetches radio queue and applies it, keeping the current song at the front.
+    private func fetchAndApplyRadioQueue(for videoId: String) async {
+        guard let client = ytMusicClient else {
+            self.logger.warning("No YTMusicClient available for fetching radio queue")
+            return
+        }
+
+        do {
+            let radioSongs = try await client.getRadioQueue(videoId: videoId)
+            guard !radioSongs.isEmpty else {
+                self.logger.info("No radio songs returned")
+                return
+            }
+
+            // Only update if we're still playing the same song
+            guard let currentSong = self.currentTrack, currentSong.videoId == videoId else {
+                self.logger.info("Track changed, discarding radio queue")
+                return
+            }
+
+            // Ensure the current song is at the front of the queue
+            // The radio queue may or may not include the seed song
+            var newQueue: [Song] = []
+
+            // Check if the current song is already in the radio queue
+            let radioContainsCurrentSong = radioSongs.contains { $0.videoId == videoId }
+
+            if radioContainsCurrentSong {
+                // Find the index of current song and reorder queue to start from it
+                if let currentSongIndex = radioSongs.firstIndex(where: { $0.videoId == videoId }) {
+                    // Put current song first, then the rest
+                    newQueue.append(currentSong)
+                    for (index, song) in radioSongs.enumerated() where index != currentSongIndex {
+                        newQueue.append(song)
+                    }
+                } else {
+                    newQueue = radioSongs
+                }
+            } else {
+                // Current song not in radio queue - prepend it
+                newQueue.append(currentSong)
+                newQueue.append(contentsOf: radioSongs)
+            }
+
+            self.queue = newQueue
+            self.currentIndex = 0
+            self.logger.info("Radio queue updated with \(newQueue.count) songs (current song at front)")
+        } catch {
+            self.logger.warning("Failed to fetch radio queue: \(error.localizedDescription)")
+        }
+    }
+
+    /// Clears the playback queue except for the currently playing track.
+    func clearQueue() {
+        guard let currentTrack else {
+            self.queue = []
+            self.currentIndex = 0
+            return
+        }
+        // Keep only the current track
+        self.queue = [currentTrack]
+        self.currentIndex = 0
+        self.logger.info("Queue cleared, keeping current track")
+    }
+
+    /// Plays a song from the queue at the specified index.
+    func playFromQueue(at index: Int) async {
+        guard index >= 0, index < self.queue.count else { return }
+        self.currentIndex = index
+        if let song = queue[safe: index] {
             await self.play(song: song)
         }
     }

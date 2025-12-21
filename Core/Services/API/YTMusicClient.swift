@@ -383,6 +383,80 @@ final class YTMusicClient: YTMusicClientProtocol {
         return Lyrics(text: lyricsText, source: source)
     }
 
+    // MARK: - Radio Queue
+
+    /// Fetches a radio queue (similar songs) based on a video ID.
+    /// Uses the "next" endpoint with a radio playlist ID (RDAMVM prefix).
+    /// - Parameter videoId: The seed video ID to base the radio on
+    /// - Returns: An array of songs forming the radio queue
+    func getRadioQueue(videoId: String) async throws -> [Song] {
+        self.logger.info("Fetching radio queue for: \(videoId)")
+
+        // Use RDAMVM prefix to request a radio mix based on the song
+        let body: [String: Any] = [
+            "videoId": videoId,
+            "playlistId": "RDAMVM\(videoId)",
+            "enablePersistentPlaylistPanel": true,
+            "isAudioOnly": true,
+            "tunerSettingValue": "AUTOMIX_SETTING_NORMAL",
+        ]
+
+        let data = try await request("next", body: body)
+        let songs = self.parseRadioQueue(from: data)
+        self.logger.info("Fetched radio queue with \(songs.count) songs")
+        return songs
+    }
+
+    /// Parses the radio queue from the "next" endpoint response.
+    private func parseRadioQueue(from data: [String: Any]) -> [Song] {
+        guard let contents = data["contents"] as? [String: Any],
+              let watchNextRenderer = contents["singleColumnMusicWatchNextResultsRenderer"] as? [String: Any],
+              let tabbedRenderer = watchNextRenderer["tabbedRenderer"] as? [String: Any],
+              let watchNextTabbedResults = tabbedRenderer["watchNextTabbedResultsRenderer"] as? [String: Any],
+              let tabs = watchNextTabbedResults["tabs"] as? [[String: Any]],
+              let firstTab = tabs.first,
+              let tabRenderer = firstTab["tabRenderer"] as? [String: Any],
+              let tabContent = tabRenderer["content"] as? [String: Any],
+              let musicQueueRenderer = tabContent["musicQueueRenderer"] as? [String: Any],
+              let queueContent = musicQueueRenderer["content"] as? [String: Any],
+              let playlistPanelRenderer = queueContent["playlistPanelRenderer"] as? [String: Any],
+              let playlistContents = playlistPanelRenderer["contents"] as? [[String: Any]]
+        else {
+            self.logger.warning("Could not parse radio queue structure")
+            return []
+        }
+
+        var songs: [Song] = []
+        for item in playlistContents {
+            guard let panelVideoRenderer = item["playlistPanelVideoRenderer"] as? [String: Any] else {
+                continue
+            }
+
+            // Extract videoId - required field
+            guard let videoId = panelVideoRenderer["videoId"] as? String else {
+                continue
+            }
+
+            let title = self.parseTitle(from: panelVideoRenderer)
+            let artists = self.parseArtists(from: panelVideoRenderer)
+            let thumbnailURL = self.parseThumbnail(from: panelVideoRenderer)
+            let duration = self.parseDuration(from: panelVideoRenderer)
+
+            let song = Song(
+                id: videoId,
+                title: title,
+                artists: artists,
+                album: nil,
+                duration: duration,
+                thumbnailURL: thumbnailURL,
+                videoId: videoId
+            )
+            songs.append(song)
+        }
+
+        return songs
+    }
+
     // MARK: - Song Metadata
 
     /// Fetches full song metadata including feedbackTokens for library management.

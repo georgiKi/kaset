@@ -33,10 +33,11 @@ struct LikedMusicView: View {
                 )
             }
             .navigationDestination(for: TopSongsDestination.self) { destination in
-                TopSongsView(viewModel: TopSongsViewModel(
-                    destination: destination,
-                    client: viewModel.client
-                ))
+                TopSongsView(
+                    viewModel: TopSongsViewModel(
+                        destination: destination,
+                        client: viewModel.client
+                    ))
             }
         }
         .safeAreaInset(edge: .bottom, spacing: 0) {

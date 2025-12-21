@@ -470,6 +470,30 @@ Clean, minimal sidebar with only functional navigation:
 - Remove placeholder items (Artists, Albums, Songs, Liked Songs, etc.)
 - Use standard SwiftUI `List` with `.listStyle(.sidebar)`
 
+### Persistent UI Elements
+
+UI elements that must remain visible across all navigation states (like the lyrics sidebar) should be placed **outside** the `NavigationSplitView` hierarchy in `MainWindow`:
+
+```swift
+// MainWindow.swift
+var mainContent: some View {
+    HStack(spacing: 0) {
+        NavigationSplitView { ... }  // Sidebar + detail navigation
+        
+        // Lyrics sidebar OUTSIDE navigation - persists across all pushed views
+        LyricsView(...)
+            .frame(width: playerService.showLyrics ? 280 : 0)
+    }
+}
+```
+
+**Why?**
+- Views pushed onto a `NavigationStack` replace content *inside* the stack
+- If a sidebar is inside the stack, pushed views won't see it
+- Placing persistent elements outside the navigation hierarchy ensures they remain visible regardless of navigation state
+
+**Pattern**: Global overlays/sidebars → `MainWindow` level, outside `NavigationSplitView`
+
 ### @available Attributes
 
 All UI components require macOS 26.0+ for Liquid Glass:

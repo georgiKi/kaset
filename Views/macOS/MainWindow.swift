@@ -105,11 +105,26 @@ struct MainWindow: View {
     @ViewBuilder
     private var mainContent: some View {
         if let client = ytMusicClient {
-            NavigationSplitView {
-                Sidebar(selection: $navigationSelection)
-            } detail: {
-                detailView(for: navigationSelection, client: client)
+            HStack(spacing: 0) {
+                // Main navigation content
+                NavigationSplitView {
+                    Sidebar(selection: $navigationSelection)
+                } detail: {
+                    detailView(for: navigationSelection, client: client)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+                // Global lyrics sidebar - outside NavigationSplitView so it persists across all navigation
+                Divider()
+                    .opacity(playerService.showLyrics ? 1 : 0)
+                    .frame(width: playerService.showLyrics ? 1 : 0)
+
+                LyricsView(client: client)
+                    .frame(width: playerService.showLyrics ? 280 : 0)
+                    .opacity(playerService.showLyrics ? 1 : 0)
+                    .clipped()
             }
+            .animation(.easeInOut(duration: 0.2), value: playerService.showLyrics)
             .frame(minWidth: 900, minHeight: 600)
         } else {
             loadingView
@@ -117,48 +132,35 @@ struct MainWindow: View {
     }
 
     @ViewBuilder
-    private func detailView(for item: NavigationItem?, client: YTMusicClient) -> some View {
-        HStack(spacing: 0) {
-            // Main content
-            Group {
-                switch item {
-                case .home:
-                    if let vm = homeViewModel {
-                        HomeView(viewModel: vm)
-                    }
-                case .explore:
-                    if let vm = exploreViewModel {
-                        ExploreView(viewModel: vm)
-                    }
-                case .search:
-                    if let vm = searchViewModel {
-                        SearchView(viewModel: vm)
-                    }
-                case .likedMusic:
-                    if let vm = likedMusicViewModel {
-                        LikedMusicView(viewModel: vm)
-                    }
-                case .library:
-                    if let vm = libraryViewModel {
-                        LibraryView(viewModel: vm)
-                    }
-                case .none:
-                    Text("Select an item from the sidebar")
-                        .foregroundStyle(.secondary)
+    private func detailView(for item: NavigationItem?, client _: YTMusicClient) -> some View {
+        Group {
+            switch item {
+            case .home:
+                if let vm = homeViewModel {
+                    HomeView(viewModel: vm)
                 }
+            case .explore:
+                if let vm = exploreViewModel {
+                    ExploreView(viewModel: vm)
+                }
+            case .search:
+                if let vm = searchViewModel {
+                    SearchView(viewModel: vm)
+                }
+            case .likedMusic:
+                if let vm = likedMusicViewModel {
+                    LikedMusicView(viewModel: vm)
+                }
+            case .library:
+                if let vm = libraryViewModel {
+                    LibraryView(viewModel: vm)
+                }
+            case .none:
+                Text("Select an item from the sidebar")
+                    .foregroundStyle(.secondary)
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-
-            // Lyrics sidebar - always in hierarchy for proper state updates on pushed views
-            Divider()
-                .opacity(playerService.showLyrics ? 1 : 0)
-
-            LyricsView(client: client)
-                .frame(width: playerService.showLyrics ? 280 : 0)
-                .opacity(playerService.showLyrics ? 1 : 0)
-                .clipped()
         }
-        .animation(.easeInOut(duration: 0.2), value: playerService.showLyrics)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private var loadingView: some View {

@@ -465,6 +465,8 @@ private struct RefinePlaylistSheet: View {
     private var loadingView: some View {
         VStack(spacing: 16) {
             ProgressView()
+                .controlSize(.regular)
+                .frame(width: 20, height: 20)
             Text("Analyzing playlist...")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)

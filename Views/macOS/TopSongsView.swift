@@ -18,6 +18,8 @@ struct TopSongsView: View {
                         .overlay(alignment: .top) {
                             if self.viewModel.loadingState == .loading {
                                 ProgressView()
+                                    .controlSize(.regular)
+                                    .frame(width: 20, height: 20)
                                     .padding()
                             }
                         }

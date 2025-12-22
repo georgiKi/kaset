@@ -3,6 +3,8 @@ import SwiftUI
 // MARK: - ErrorView
 
 /// Reusable error view with title, message, and retry action.
+/// Uses native `ContentUnavailableView` for platform-consistent styling.
+@available(macOS 14.0, *)
 struct ErrorView: View {
     let title: String
     let message: String
@@ -19,26 +21,16 @@ struct ErrorView: View {
     }
 
     var body: some View {
-        VStack(spacing: 16) {
-            Image(systemName: "exclamationmark.triangle")
-                .font(.largeTitle)
-                .foregroundStyle(.secondary)
-
-            Text(self.title)
-                .font(.headline)
-
+        ContentUnavailableView {
+            Label(self.title, systemImage: "exclamationmark.triangle")
+        } description: {
             Text(self.message)
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-
+        } actions: {
             Button("Try Again") {
                 self.retryAction()
             }
             .buttonStyle(.borderedProminent)
         }
-        .padding()
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
 

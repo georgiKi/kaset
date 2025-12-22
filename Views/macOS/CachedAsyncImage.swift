@@ -35,11 +35,20 @@ struct CachedAsyncImage<Content: View, Placeholder: View>: View {
     }
 }
 
-extension CachedAsyncImage where Placeholder == ProgressView<EmptyView, EmptyView> {
+/// A simple ProgressView wrapper with proper sizing to avoid AppKit constraint warnings.
+private struct SizedProgressView: View {
+    var body: some View {
+        ProgressView()
+            .controlSize(.regular)
+            .frame(width: 20, height: 20)
+    }
+}
+
+extension CachedAsyncImage where Placeholder == SizedProgressView {
     /// Convenience initializer with default ProgressView placeholder.
     init(url: URL?, @ViewBuilder content: @escaping (Image) -> Content) {
         self.url = url
         self.content = content
-        self.placeholder = { ProgressView() }
+        self.placeholder = { SizedProgressView() }
     }
 }

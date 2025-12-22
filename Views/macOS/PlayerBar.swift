@@ -47,6 +47,52 @@ struct PlayerBar: View {
                 self.isHovering = hovering
             }
         }
+        .background {
+            // Keyboard shortcuts for media controls
+            Group {
+                // Space: Play/Pause
+                Button("") {
+                    Task { await self.playerService.playPause() }
+                }
+                .keyboardShortcut(.space, modifiers: [])
+                .opacity(0)
+
+                // Command + Right Arrow: Next track
+                Button("") {
+                    Task { await self.playerService.next() }
+                }
+                .keyboardShortcut(.rightArrow, modifiers: .command)
+                .opacity(0)
+
+                // Command + Left Arrow: Previous track
+                Button("") {
+                    Task { await self.playerService.previous() }
+                }
+                .keyboardShortcut(.leftArrow, modifiers: .command)
+                .opacity(0)
+
+                // Command + Up Arrow: Volume up
+                Button("") {
+                    Task { await self.playerService.setVolume(min(1.0, self.playerService.volume + 0.1)) }
+                }
+                .keyboardShortcut(.upArrow, modifiers: .command)
+                .opacity(0)
+
+                // Command + Down Arrow: Volume down
+                Button("") {
+                    Task { await self.playerService.setVolume(max(0.0, self.playerService.volume - 0.1)) }
+                }
+                .keyboardShortcut(.downArrow, modifiers: .command)
+                .opacity(0)
+
+                // Command + M: Toggle mute
+                Button("") {
+                    Task { await self.playerService.toggleMute() }
+                }
+                .keyboardShortcut("m", modifiers: .command)
+                .opacity(0)
+            }
+        }
         .onChange(of: self.playerService.progress) { _, newValue in
             // Sync local seek value when not actively seeking
             if !self.isSeeking, self.playerService.duration > 0 {

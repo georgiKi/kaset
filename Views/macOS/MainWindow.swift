@@ -230,7 +230,9 @@ struct MainWindow: View {
     private var loadingView: some View {
         VStack(spacing: 16) {
             ProgressView()
+                .controlSize(.regular)
                 .scaleEffect(1.5)
+                .frame(width: 30, height: 30)
             Text("Loading YouTube Music...")
                 .foregroundStyle(.secondary)
         }
@@ -243,6 +245,8 @@ struct MainWindow: View {
             CassetteIcon(size: 60)
                 .foregroundStyle(.tint)
             ProgressView()
+                .controlSize(.regular)
+                .frame(width: 20, height: 20)
         }
         .frame(minWidth: 900, minHeight: 600)
     }

@@ -170,6 +170,7 @@ struct ArtistDetailView: View {
                 if self.viewModel.isSubscribing {
                     ProgressView()
                         .controlSize(.small)
+                        .frame(width: 16, height: 16)
                 } else {
                     Text(self.subscribeButtonText(detail))
                 }
@@ -186,6 +187,7 @@ struct ArtistDetailView: View {
                 if self.viewModel.isSubscribing {
                     ProgressView()
                         .controlSize(.small)
+                        .frame(width: 16, height: 16)
                 } else {
                     Text(self.subscribeButtonText(detail))
                 }

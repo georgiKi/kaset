@@ -44,7 +44,9 @@ struct LoginSheet: View {
 
                 if self.isCheckingLogin {
                     ProgressView()
+                        .controlSize(.small)
                         .scaleEffect(0.8)
+                        .frame(width: 13, height: 13)
                 }
             }
 

@@ -41,7 +41,8 @@ final class ExploreViewModel {
 
         do {
             let response = try await client.getExplore()
-            self.sections = response.sections
+            // Filter out Charts section since it's available in the sidebar
+            self.sections = response.sections.filter { !self.isChartsSection($0) }
             self.hasMoreSections = self.client.hasMoreExploreSections
             self.loadingState = .loaded
             self.continuationsLoaded = 0
@@ -82,11 +83,13 @@ final class ExploreViewModel {
 
             do {
                 if let additionalSections = try await client.getExploreContinuation() {
-                    self.sections.append(contentsOf: additionalSections)
+                    // Filter out Charts section since it's available in the sidebar
+                    let filteredSections = additionalSections.filter { !self.isChartsSection($0) }
+                    self.sections.append(contentsOf: filteredSections)
                     self.continuationsLoaded += 1
                     self.hasMoreSections = self.client.hasMoreExploreSections
                     let continuationNum = self.continuationsLoaded
-                    self.logger.info("Background loaded \(additionalSections.count) more sections (continuation \(continuationNum))")
+                    self.logger.info("Background loaded \(filteredSections.count) more sections (continuation \(continuationNum))")
                 } else {
                     self.hasMoreSections = false
                     break
@@ -111,5 +114,12 @@ final class ExploreViewModel {
         self.hasMoreSections = true
         self.continuationsLoaded = 0
         await self.load()
+    }
+
+    // MARK: - Private Helpers
+
+    /// Determines if a section is a Charts section (which should be filtered out).
+    private func isChartsSection(_ section: HomeSection) -> Bool {
+        section.title.lowercased() == "charts"
     }
 }

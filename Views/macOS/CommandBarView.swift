@@ -58,7 +58,9 @@ struct CommandBarView: View {
 
                 if self.isProcessing {
                     ProgressView()
+                        .controlSize(.small)
                         .scaleEffect(0.7)
+                        .frame(width: 11, height: 11)
                 } else if !self.inputText.isEmpty {
                     Button {
                         self.inputText = ""

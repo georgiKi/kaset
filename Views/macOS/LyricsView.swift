@@ -76,7 +76,9 @@ struct LyricsView: View {
                 } label: {
                     if self.isExplaining {
                         ProgressView()
+                            .controlSize(.small)
                             .scaleEffect(0.6)
+                            .frame(width: 10, height: 10)
                     } else {
                         Image(systemName: self.showExplanation ? "sparkles.rectangle.stack.fill" : "sparkles")
                     }
@@ -108,6 +110,8 @@ struct LyricsView: View {
     private var loadingView: some View {
         VStack(spacing: 16) {
             ProgressView()
+                .controlSize(.regular)
+                .frame(width: 20, height: 20)
             Text("Loading lyrics...")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
@@ -206,7 +210,9 @@ struct LyricsView: View {
                         .font(.subheadline.weight(.medium))
                 } else {
                     ProgressView()
+                        .controlSize(.small)
                         .scaleEffect(0.6)
+                        .frame(width: 10, height: 10)
                 }
             }
             .padding(.horizontal, 16)
@@ -239,7 +245,9 @@ struct LyricsView: View {
             } else {
                 HStack(spacing: 8) {
                     ProgressView()
+                        .controlSize(.small)
                         .scaleEffect(0.6)
+                        .frame(width: 10, height: 10)
                     Text("Analyzing...")
                         .font(.subheadline)
                         .foregroundStyle(.tertiary)

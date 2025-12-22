@@ -24,7 +24,27 @@ actor ImageCache {
         let cacheDir = self.fileManager.urls(for: .cachesDirectory, in: .userDomainMask).first!
         self.diskCacheURL = cacheDir.appendingPathComponent("com.kaset.imagecache", isDirectory: true)
         try? self.fileManager.createDirectory(at: self.diskCacheURL, withIntermediateDirectories: true)
+
+        // Set up memory pressure monitoring
+        Self.setupMemoryPressureMonitoring(cache: self)
     }
+
+    /// Sets up monitoring for system memory pressure notifications.
+    private static func setupMemoryPressureMonitoring(cache: ImageCache) {
+        // Use DispatchSource for memory pressure monitoring
+        let source = DispatchSource.makeMemoryPressureSource(eventMask: [.warning, .critical], queue: .main)
+        source.setEventHandler {
+            Task {
+                await cache.clearMemoryCache()
+            }
+        }
+        source.resume()
+        // Store the source to prevent deallocation
+        Self.memoryPressureSource = source
+    }
+
+    /// Dispatch source for memory pressure monitoring.
+    nonisolated(unsafe) private static var memoryPressureSource: DispatchSourceMemoryPressure?
 
     /// Fetches an image from cache or network.
     /// - Parameters:

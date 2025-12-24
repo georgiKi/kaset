@@ -36,11 +36,14 @@ Tests/KasetTests/
 │   ├── MockURLProtocol.swift    # Network mocking
 │   ├── MockYTMusicClient.swift  # API client mock
 │   └── TestFixtures.swift       # Fixture loading utilities
+├── SwiftTestingHelpers/
+│   └── Tags.swift               # Custom test tags (.api, .parser, etc.)
 ├── Fixtures/
 │   ├── home_response.json       # Sample API responses
 │   ├── search_response.json
 │   └── playlist_detail.json
-├── *Tests.swift                 # Test files
+├── *Tests.swift                 # Unit test files (Swift Testing)
+└── MusicIntentIntegrationTests.swift  # AI integration tests
 ```
 
 ## Unit Test Requirements
@@ -343,6 +346,53 @@ Button {
 ```
 
 ## Integration Testing
+
+### AI Integration Tests (Apple Intelligence)
+
+The `MusicIntentIntegrationTests` suite validates LLM parsing of natural language commands into `MusicIntent` structs.
+
+#### Requirements
+
+- macOS 26+ with Apple Intelligence enabled
+- Tests skip gracefully when AI is unavailable via `throw TestSkipped()`
+
+#### What's Tested
+
+| Category         | Test Count | Example Prompts                              |
+| ---------------- | ---------- | -------------------------------------------- |
+| Basic Actions    | 5          | "Play music", "Skip", "Pause", "Like this"   |
+| Mood Queries     | 5          | "Play something chill", "Play upbeat music"  |
+| Genre Queries    | 5          | "Play jazz", "Play rock", "Play electronic"  |
+| Era Queries      | 4          | "Play 80s hits", "Play 90s top songs"        |
+| Artist Queries   | 3          | "Play Beatles", "Play Taylor Swift"          |
+| Activity Queries | 4          | "Music for studying", "Workout songs"        |
+| Complex Queries  | 3          | "Chill jazz from the 80s", "Acoustic covers" |
+| Queue Action     | 1          | "Add jazz to the queue"                      |
+| **Total**        | **~30**    |                                              |
+
+#### Run Commands
+
+```bash
+# Run ONLY integration tests (requires Apple Intelligence)
+xcodebuild test -scheme Kaset -destination 'platform=macOS' \
+  -only-testing:KasetTests/MusicIntentIntegrationTests
+
+# Run all unit tests EXCEPT integration tests
+xcodebuild test -scheme Kaset -destination 'platform=macOS' \
+  -only-testing:KasetTests \
+  -skip-testing:KasetTests/MusicIntentIntegrationTests
+
+# Skip by tag
+xcodebuild test -scheme Kaset -destination 'platform=macOS' \
+  -only-testing:KasetTests -skip-test-tag integration
+```
+
+#### Test Characteristics
+
+- **Tagged**: `.integration` and `.slow` for easy filtering
+- **Skip-friendly**: Uses `throw TestSkipped()` when AI unavailable
+- **Parameterized**: Efficient coverage with Swift Testing's `arguments:`
+- **Non-deterministic**: LLM output may vary; tests use flexible matching
 
 ### Manual Test Checklist
 

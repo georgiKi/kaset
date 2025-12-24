@@ -142,7 +142,7 @@ struct LikeStatusTests {
         #expect(LikeStatus.disliked.rawValue == "DISLIKE")
         #expect(LikeStatus.indifferent.rawValue == "INDIFFERENT")
     }
-    
+
     // With parameterized tests
     @Test("All statuses have non-empty raw values", arguments: LikeStatus.allCases)
     func allStatusesHaveRawValues(status: LikeStatus) {
@@ -248,13 +248,13 @@ final class AuthServiceTests: XCTestCase {
 struct AuthServiceTests {
     let authService: AuthService
     let mockWebKitManager: MockWebKitManager
-    
+
     init() {
         mockWebKitManager = MockWebKitManager()
         authService = AuthService(webKitManager: mockWebKitManager)
     }
     // No tearDown needed - ARC cleans up when struct is deallocated
-    
+
     @Test("Initial state is initializing")
     func initialState() {
         #expect(authService.state == .initializing)
@@ -275,7 +275,7 @@ struct AuthServiceTests {
 func testWithAsyncCleanup() async {
     let resource = await createResource()
     defer { Task { await resource.cleanup() } }  // Fire-and-forget cleanup
-    
+
     // ... test logic
 }
 ```
@@ -317,12 +317,12 @@ final class HomeViewModelTests: XCTestCase {
 struct HomeViewModelTests {
     let mockClient: MockYTMusicClient
     let viewModel: HomeViewModel
-    
+
     init() {
         mockClient = MockYTMusicClient()
         viewModel = HomeViewModel(client: mockClient)
     }
-    
+
     @Test("Load success updates state to loaded")
     func loadSuccess() async {
         mockClient.homeResponse = TestFixtures.makeHomeResponse()
@@ -491,12 +491,12 @@ If you need async cleanup (we currently don't, but for future reference):
 @Test("Test requiring async cleanup")
 func testWithAsyncCleanup() async throws {
     let resource = try await createResource()
-    
+
     // Option 1: Fire-and-forget (if cleanup failure is non-critical)
     defer { Task { await resource.cleanup() } }
-    
+
     // Option 2: Synchronous cleanup wrapper (if cleanup must complete)
-    defer { 
+    defer {
         let semaphore = DispatchSemaphore(value: 0)
         Task {
             await resource.cleanup()
@@ -504,7 +504,7 @@ func testWithAsyncCleanup() async throws {
         }
         semaphore.wait()
     }
-    
+
     // Test logic here
 }
 ```
@@ -568,122 +568,6 @@ swift test --filter .api
 ```
 
 **CI/CD Note**: Ensure build agents use **Xcode 16+**. Earlier versions will not discover Swift Testing tests.
-
----
-
-## Advanced Swift Testing Patterns
-
-### Tags for Test Categorization
-
-All test suites now use tags for categorization. Tags enable running subsets of tests.
-
-**Applied tags:**
-
-| Tag | Suites |
-|-----|--------|
-| `.model` | `ModelTests`, `LikeStatusTests`, `ExtensionsTests`, `HomeSectionTests`, `YTMusicErrorTests`, `SearchResponseTests`, `ContentSourceTests` |
-| `.parser` | `HomeResponseParserTests`, `SearchResponseParserTests`, `PlaylistParserTests`, `ParsingHelpersTests`, `SearchSuggestionsParserTests` |
-| `.service` | `AuthServiceTests`, `WebKitManagerTests`, `ErrorPresenterTests`, `APICacheTests`, `PlayerServiceTests` |
-| `.viewModel` | `HomeViewModelTests`, `SearchViewModelTests`, `LibraryViewModelTests`, `ExploreViewModelTests`, `ArtistDetailTests` |
-| `.api` | `YTMusicClientTests`, `RetryPolicyTests`, `MusicIntentTests`, `MusicQueryTests`, `AISessionTypeTests`, `QueueIntentTests` |
-
-**Example usage:**
-
-```swift
-@Suite("HomeViewModel", .serialized, .tags(.viewModel), .timeLimit(.minutes(1)))
-@MainActor
-struct HomeViewModelTests { ... }
-```
-
-**CLI filtering:**
-
-```bash
-# Run only parser tests
-swift test --filter .parser
-
-# Run model and service tests
-swift test --filter .model --filter .service
-
-# Exclude slow tests
-swift test --skip .slow
-```
-
-### Time Limits for Async Tests
-
-All ViewModel test suites now have `.timeLimit(.minutes(1))` to prevent hung tests from stalling CI.
-
-```swift
-@Suite("HomeViewModel", .serialized, .tags(.viewModel), .timeLimit(.minutes(1)))
-```
-
-The more restrictive (shorter) duration wins when applied at both suite and test level.
-
-### CustomTestStringConvertible for Readable Failures
-
-Core models conform to `CustomTestStringConvertible` for better test failure messages.
-
-**File:** `Tests/KasetTests/SwiftTestingHelpers/TestStringConvertible.swift`
-
-**Before (default output):**
-```
-#expect(song == expectedSong)
-      | Song(id: "abc123", title: "Never Gonna...", artists: [...], ...)
-```
-
-**After (with CustomTestStringConvertible):**
-```
-#expect(song == expectedSong)
-      | "Never Gonna Give You Up" by Rick Astley (3:33)
-```
-
-**Conforming types:**
-- `Song` → `"Title" by Artist (duration)`
-- `Playlist` → `"Title" [playlist] (N songs)`
-- `Album` → `"Title" by Artist (year)`
-- `Artist` → `Artist: "Name"`
-- `PlaylistDetail` → `"Title" [type] (N tracks)`
-- `HomeSectionItem` → `Type: description`
-- `SearchResultItem` → `SearchResult[Type]: description`
-
-### Future Patterns (Not Yet Implemented)
-
-#### `.bug()` Trait for Known Issues
-
-When writing tests for bug fixes, associate with issue tracker:
-
-```swift
-@Test("Parsing handles edge case", .bug("KASET-123", "https://github.com/sozercan/kaset/issues/123"))
-func parsingEdgeCase() { ... }
-```
-
-#### `withKnownIssue` for Expected Failures
-
-Use instead of `.disabled()` for known bugs. The test still runs, and if the bug gets fixed, the test fails (alerting you to remove it):
-
-```swift
-@Test("Known parsing issue")
-func knownParsingIssue() {
-    withKnownIssue("Thumbnail parsing broken for empty arrays") {
-        let result = parse(problematicData)
-        #expect(result.thumbnails.isEmpty == false)
-    }
-}
-```
-
-#### `confirmation()` for Event-Based Testing
-
-Use for testing delegate callbacks, notifications, or events:
-
-```swift
-@Test("Player notifies delegate on state change")
-func playerNotifiesDelegate() async {
-    await confirmation("delegate was called", expectedCount: 1) { confirm in
-        let delegate = MockPlayerDelegate { confirm() }
-        let player = PlayerService(delegate: delegate)
-        await player.play(videoId: "test")
-    }
-}
-```
 
 ---
 

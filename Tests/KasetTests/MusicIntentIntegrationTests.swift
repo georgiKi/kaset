@@ -45,10 +45,22 @@ struct MusicIntentIntegrationTests {
   /// Maximum number of retry attempts for flaky LLM calls.
   private static let maxRetries = 3
 
-    /// System prompt for intent parsing - kept minimal to fit in context window.
+    /// System prompt for intent parsing - provides clear field definitions for consistent parsing.
     private static let systemPrompt = """
-        Parse music commands into MusicIntent. Actions: play, queue, shuffle, like, dislike, \
-        skip, previous, pause, resume, search. Fields: query, artist, genre, mood, era, version, activity.
+        Parse music commands into MusicIntent. Be precise about field placement:
+        
+        Actions: play, queue, shuffle, like, dislike, skip, previous, pause, resume, search
+        
+        Fields (use exact field for each concept):
+        - query: The raw search text or song/artist name
+        - artist: Specific artist/band name (e.g., "Beatles", "Taylor Swift")
+        - genre: Music genre (rock, jazz, hip-hop, classical, electronic, pop, country)
+        - mood: Emotional quality (upbeat, chill, sad, happy, energetic, relaxing, melancholic)
+        - era: Time period (1980s, 1990s, 2000s, classic)
+        - version: Recording type (acoustic, live, remix, instrumental, cover)
+        - activity: What user is doing (workout, study, sleep, party, driving, cooking, focus, running, yoga)
+        
+        IMPORTANT: "for studying", "for workout", "for sleep" → put in activity field, not mood.
         """
 
   // MARK: - Test Helpers
@@ -220,6 +232,108 @@ struct MusicIntentIntegrationTests {
       #expect(
         combined.contains("acoustic"), "Expected 'acoustic' in version or query, got: \(combined)")
     }
+    }
+
+    // MARK: - Shuffle Commands
+
+    @Test("Parses shuffle commands", arguments: [
+        (prompt: "Shuffle my library", expected: "library"),
+        (prompt: "Shuffle play my music", expected: ""),
+    ])
+    func parseShuffleCommand(prompt: String, expected: String) async throws {
+        try await withRetry {
+            try await parseIntent(from: prompt)
+        } validate: { intent in
+            #expect(intent.action == .shuffle || intent.action == .play)
+            if !expected.isEmpty {
+                let combined = "\(intent.shuffleScope) \(intent.query)".lowercased()
+                #expect(
+                    combined.contains(expected),
+                    "Expected '\(expected)' in shuffleScope or query, got: \(combined)"
+                )
+            }
+        }
+    }
+
+    // MARK: - Navigation Commands
+
+    @Test("Parses previous track command")
+    func parsePreviousCommand() async throws {
+        try await withRetry {
+            try await parseIntent(from: "Go back to the previous song")
+        } validate: { intent in
+            #expect(intent.action == .previous)
+        }
+    }
+
+    @Test("Parses search command")
+    func parseSearchCommand() async throws {
+        try await withRetry {
+            try await parseIntent(from: "Search for Billie Eilish")
+        } validate: { intent in
+            #expect(intent.action == .search || intent.action == .play)
+            let combined = "\(intent.artist) \(intent.query)".lowercased()
+            #expect(combined.contains("billie") || combined.contains("eilish"))
+        }
+    }
+
+    // MARK: - Rating Commands
+
+    @Test("Parses dislike command")
+    func parseDislikeCommand() async throws {
+        try await withRetry {
+            try await parseIntent(from: "I don't like this song")
+        } validate: { intent in
+            #expect(intent.action == .dislike)
+        }
+    }
+
+    // MARK: - Multi-Attribute Queries
+
+    @Test("Parses query with artist and mood")
+    func parseArtistWithMood() async throws {
+        try await withRetry {
+            try await parseIntent(from: "Play energetic songs by Daft Punk")
+        } validate: { intent in
+            #expect(intent.action == .play)
+            let artistQuery = "\(intent.artist) \(intent.query)".lowercased()
+            let moodQuery = "\(intent.mood) \(intent.query)".lowercased()
+            #expect(artistQuery.contains("daft") || artistQuery.contains("punk"))
+            #expect(moodQuery.contains("energetic") || moodQuery.contains("upbeat"))
+        }
+    }
+
+    @Test("Parses query with genre, era, and mood")
+    func parseGenreEraMood() async throws {
+        try await withRetry {
+            try await parseIntent(from: "Play upbeat disco from the 70s")
+        } validate: { intent in
+            #expect(intent.action == .play)
+            let allFields = "\(intent.mood) \(intent.genre) \(intent.era) \(intent.query)".lowercased()
+            #expect(allFields.contains("disco") || allFields.contains("funk"))
+            #expect(allFields.contains("70") || allFields.contains("1970"))
+        }
+    }
+
+    // MARK: - Edge Cases
+
+    @Test("Handles ambiguous play command")
+    func handleAmbiguousPlay() async throws {
+        try await withRetry {
+            try await parseIntent(from: "Play something")
+        } validate: { intent in
+            #expect(intent.action == .play)
+        }
+    }
+
+    @Test("Handles language variation")
+    func handleLanguageVariation() async throws {
+        try await withRetry {
+            try await parseIntent(from: "Put on some tunes")
+        } validate: { intent in
+            // Should interpret as play
+            #expect(intent.action == .play)
+        }
     }
 }
 

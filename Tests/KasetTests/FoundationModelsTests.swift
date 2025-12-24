@@ -388,11 +388,307 @@ struct ContentSourceTests {
 // MARK: - QueueIntentTests
 
 @available(macOS 26.0, *)
-@Suite("QueueIntent", .tags(.api))
+@Suite("QueueIntent Unit", .tags(.api))
 struct QueueIntentTests {
     @Test("Queue action values")
     func queueActionValues() {
         let actions: [QueueAction] = [.add, .addNext, .remove, .clear, .shuffle]
         #expect(actions.count == 5, "Should have 5 queue actions")
+    }
+
+    @Test(
+        "Queue action raw values",
+        arguments: [
+            (QueueAction.add, "add"),
+            (QueueAction.addNext, "addNext"),
+            (QueueAction.remove, "remove"),
+            (QueueAction.clear, "clear"),
+            (QueueAction.shuffle, "shuffle"),
+        ]
+    )
+    func queueActionRawValues(action: QueueAction, expected: String) {
+        #expect(action.rawValue == expected)
+    }
+
+    @Test("QueueAction is CaseIterable")
+    func queueActionCaseIterable() {
+        let allCases = QueueAction.allCases
+        #expect(allCases.count == 5)
+        #expect(allCases.contains(.add))
+        #expect(allCases.contains(.addNext))
+        #expect(allCases.contains(.remove))
+        #expect(allCases.contains(.clear))
+        #expect(allCases.contains(.shuffle))
+    }
+
+    @Test("QueueIntent with add action")
+    func queueIntentAddAction() {
+        let intent = QueueIntent(
+            action: .add,
+            query: "jazz songs",
+            count: 3
+        )
+
+        #expect(intent.action == .add)
+        #expect(intent.query == "jazz songs")
+        #expect(intent.count == 3)
+    }
+
+    @Test("QueueIntent with clear action has empty query")
+    func queueIntentClearAction() {
+        let intent = QueueIntent(
+            action: .clear,
+            query: "",
+            count: 0
+        )
+
+        #expect(intent.action == .clear)
+        #expect(intent.query.isEmpty)
+        // count should be 0 for clear actions (no songs to add)
+        let expectedCount = 0
+        #expect(intent.count == expectedCount)
+    }
+
+    @Test("QueueIntent with shuffle action")
+    func queueIntentShuffleAction() {
+        let intent = QueueIntent(
+            action: .shuffle,
+            query: "",
+            count: 0
+        )
+
+        #expect(intent.action == .shuffle)
+    }
+}
+
+// MARK: - MusicActionTests
+
+@available(macOS 26.0, *)
+@Suite("MusicAction", .tags(.model))
+struct MusicActionTests {
+    @Test(
+        "Music action raw values",
+        arguments: [
+            (MusicAction.play, "play"),
+            (MusicAction.queue, "queue"),
+            (MusicAction.shuffle, "shuffle"),
+            (MusicAction.like, "like"),
+            (MusicAction.dislike, "dislike"),
+            (MusicAction.skip, "skip"),
+            (MusicAction.previous, "previous"),
+            (MusicAction.pause, "pause"),
+            (MusicAction.resume, "resume"),
+            (MusicAction.search, "search"),
+        ]
+    )
+    func musicActionRawValues(action: MusicAction, expected: String) {
+        #expect(action.rawValue == expected)
+    }
+
+    @Test("MusicAction is CaseIterable")
+    func musicActionCaseIterable() {
+        let allCases = MusicAction.allCases
+        #expect(allCases.count == 10)
+    }
+
+    @Test("MusicAction contains all expected cases")
+    func musicActionAllCases() {
+        let allCases = MusicAction.allCases
+        #expect(allCases.contains(.play))
+        #expect(allCases.contains(.queue))
+        #expect(allCases.contains(.shuffle))
+        #expect(allCases.contains(.like))
+        #expect(allCases.contains(.dislike))
+        #expect(allCases.contains(.skip))
+        #expect(allCases.contains(.previous))
+        #expect(allCases.contains(.pause))
+        #expect(allCases.contains(.resume))
+        #expect(allCases.contains(.search))
+    }
+}
+
+// MARK: - PlaylistChangesTests
+
+@available(macOS 26.0, *)
+@Suite("PlaylistChanges Unit", .tags(.model))
+struct PlaylistChangesTests {
+    @Test("PlaylistChanges with empty removals")
+    func emptyRemovals() {
+        let changes = PlaylistChanges(
+            removals: [],
+            reorderedIds: nil,
+            reasoning: "No changes needed"
+        )
+
+        #expect(changes.removals.isEmpty)
+        #expect(changes.reorderedIds == nil)
+        #expect(!changes.reasoning.isEmpty)
+    }
+
+    @Test("PlaylistChanges with removals")
+    func withRemovals() {
+        let changes = PlaylistChanges(
+            removals: ["video1", "video2"],
+            reorderedIds: nil,
+            reasoning: "Removed duplicates"
+        )
+
+        #expect(changes.removals.count == 2)
+        #expect(changes.removals.contains("video1"))
+        #expect(changes.removals.contains("video2"))
+    }
+
+    @Test("PlaylistChanges with reordering")
+    func withReordering() {
+        let newOrder = ["video3", "video1", "video2"]
+        let changes = PlaylistChanges(
+            removals: [],
+            reorderedIds: newOrder,
+            reasoning: "Sorted by energy level"
+        )
+
+        #expect(changes.removals.isEmpty)
+        #expect(changes.reorderedIds == newOrder)
+    }
+
+    @Test("PlaylistChanges reasoning is present")
+    func reasoningPresent() {
+        let changes = PlaylistChanges(
+            removals: ["video1"],
+            reorderedIds: nil,
+            reasoning: "Removed track that doesn't fit the vibe"
+        )
+
+        #expect(changes.reasoning.contains("Removed"))
+    }
+}
+
+// MARK: - QueueChangesTests
+
+@available(macOS 26.0, *)
+@Suite("QueueChanges Unit", .tags(.model))
+struct QueueChangesTests {
+    @Test("QueueChanges with empty additions and removals")
+    func emptyChanges() {
+        let changes = QueueChanges(
+            removals: [],
+            additions: [],
+            reorderedIds: nil,
+            reasoning: "Queue looks good"
+        )
+
+        #expect(changes.removals.isEmpty)
+        #expect(changes.additions.isEmpty)
+        #expect(changes.reorderedIds == nil)
+    }
+
+    @Test("QueueChanges with additions only")
+    func additionsOnly() {
+        let changes = QueueChanges(
+            removals: [],
+            additions: ["newVideo1", "newVideo2"],
+            reorderedIds: nil,
+            reasoning: "Added more jazz tracks"
+        )
+
+        #expect(changes.additions.count == 2)
+        #expect(changes.removals.isEmpty)
+    }
+
+    @Test("QueueChanges with removals only")
+    func removalsOnly() {
+        let changes = QueueChanges(
+            removals: ["oldVideo1"],
+            additions: [],
+            reorderedIds: nil,
+            reasoning: "Removed slow track"
+        )
+
+        #expect(changes.removals.count == 1)
+        #expect(changes.additions.isEmpty)
+    }
+
+    @Test("QueueChanges with reordering")
+    func withReordering() {
+        let reordered = ["v3", "v1", "v2"]
+        let changes = QueueChanges(
+            removals: [],
+            additions: [],
+            reorderedIds: reordered,
+            reasoning: "Shuffled for variety"
+        )
+
+        #expect(changes.reorderedIds == reordered)
+    }
+
+    @Test("QueueChanges with all operations")
+    func allOperations() {
+        let changes = QueueChanges(
+            removals: ["old1"],
+            additions: ["new1", "new2"],
+            reorderedIds: ["new1", "existing1", "new2"],
+            reasoning: "Refreshed queue with new tracks"
+        )
+
+        #expect(changes.removals.count == 1)
+        #expect(changes.additions.count == 2)
+        #expect(changes.reorderedIds?.count == 3)
+        #expect(!changes.reasoning.isEmpty)
+    }
+}
+
+// MARK: - LyricsSummaryTests
+
+@available(macOS 26.0, *)
+@Suite("LyricsSummary Unit", .tags(.model))
+struct LyricsSummaryTests {
+    @Test("LyricsSummary with minimal themes")
+    func minimalThemes() {
+        let summary = LyricsSummary(
+            themes: ["love", "loss"],
+            mood: "melancholic",
+            explanation: "A song about heartbreak and moving on."
+        )
+
+        #expect(summary.themes.count >= 2)
+        #expect(summary.themes.contains("love"))
+        #expect(summary.themes.contains("loss"))
+    }
+
+    @Test("LyricsSummary mood is single word or short phrase")
+    func moodFormat() {
+        let summary = LyricsSummary(
+            themes: ["hope", "resilience", "growth"],
+            mood: "uplifting",
+            explanation: "An inspiring anthem about overcoming obstacles."
+        )
+
+        #expect(!summary.mood.isEmpty)
+        #expect(summary.mood == "uplifting")
+    }
+
+    @Test("LyricsSummary explanation is concise")
+    func explanationConcise() {
+        let summary = LyricsSummary(
+            themes: ["nostalgia", "youth", "summer"],
+            mood: "nostalgic",
+            explanation: "The song reminisces about carefree summer days. It captures the bittersweet feeling of looking back at simpler times."
+        )
+
+        #expect(!summary.explanation.isEmpty)
+        // Should be 2-4 sentences, reasonably concise
+        #expect(summary.explanation.count < 500)
+    }
+
+    @Test("LyricsSummary with multiple themes")
+    func multipleThemes() {
+        let summary = LyricsSummary(
+            themes: ["rebellion", "freedom", "youth", "identity"],
+            mood: "defiant",
+            explanation: "A punk anthem about breaking free from expectations."
+        )
+
+        #expect(summary.themes.count >= 2)
+        #expect(summary.themes.count <= 5)
     }
 }

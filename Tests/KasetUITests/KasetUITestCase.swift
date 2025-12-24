@@ -23,6 +23,7 @@ enum TestAccessibilityID {
 
 /// Base class for Kaset UI tests.
 /// Provides common setup, launch configuration, and helper methods.
+@MainActor
 class KasetUITestCase: XCTestCase {
     /// The application under test.
     var app: XCUIApplication!

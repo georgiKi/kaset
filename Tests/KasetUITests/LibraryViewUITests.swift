@@ -1,6 +1,7 @@
 import XCTest
 
 /// UI tests for the LibraryView (Playlists).
+@MainActor
 final class LibraryViewUITests: KasetUITestCase {
     // MARK: - Basic Display
 

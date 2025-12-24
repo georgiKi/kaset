@@ -1,6 +1,7 @@
 import XCTest
 
 /// UI tests for the HomeView.
+@MainActor
 final class HomeViewUITests: KasetUITestCase {
     // MARK: - Basic Display
 

@@ -670,7 +670,7 @@ func runMain() async {
     // Parse output file option
     var outputFile: String?
     for (index, arg) in args.enumerated() {
-        if (arg == "-o" || arg == "--output"), index + 1 < args.count {
+        if arg == "-o" || arg == "--output", index + 1 < args.count {
             outputFile = args[index + 1]
             break
         }

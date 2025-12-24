@@ -1,6 +1,7 @@
 import XCTest
 
 /// UI tests that verify the app launches correctly.
+@MainActor
 final class AppLaunchUITests: KasetUITestCase {
     // MARK: - App Launch
 

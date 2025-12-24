@@ -123,7 +123,6 @@ struct KasetApp: App {
                 .environment(self.authService)
         }
         .commands {
-
             // Playback commands
             CommandMenu("Playback") {
                 // Play/Pause - Space

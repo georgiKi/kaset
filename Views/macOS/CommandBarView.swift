@@ -111,12 +111,6 @@ struct CommandBarView: View {
                 .foregroundStyle(.secondary)
 
             Spacer()
-
-            Button("Search instead") {
-                self.fallbackToSearch()
-            }
-            .buttonStyle(.bordered)
-            .controlSize(.small)
         }
         .padding(12)
     }
@@ -262,10 +256,15 @@ struct CommandBarView: View {
             await self.executeIntent(response.content)
         } catch {
             // Check if this is a deserialization/generation error
+            // Check both String(describing:) and localizedDescription for coverage
             let errorDescription = String(describing: error)
-            let isDeserializationError = errorDescription.contains("deserialize") ||
-                errorDescription.contains("Generable") ||
-                errorDescription.contains("generation")
+            let localizedDesc = error.localizedDescription
+            let combinedDesc = "\(errorDescription) \(localizedDesc)"
+
+            let isDeserializationError = combinedDesc.contains("deserialize") ||
+                combinedDesc.contains("Generable") ||
+                combinedDesc.contains("generation") ||
+                combinedDesc.contains("GenericError")
 
             if isDeserializationError {
                 // Fallback: use the query directly as a search
@@ -287,7 +286,7 @@ struct CommandBarView: View {
     private func fallbackDirectSearch(query: String) async {
         // Extract action keyword and clean query
         let lowered = query.lowercased()
-        let cleanQuery: String
+        var cleanQuery: String
 
         if lowered.hasPrefix("play ") {
             cleanQuery = String(query.dropFirst(5)).trimmingCharacters(in: .whitespaces)
@@ -333,12 +332,138 @@ struct CommandBarView: View {
             cleanQuery = query
         }
 
+        // Extract mood/genre from natural language patterns like "something chill"
+        cleanQuery = self.extractMoodOrGenre(from: cleanQuery)
+
         // Default to play action with search
         await self.playSearchResult(query: cleanQuery, description: cleanQuery)
         if self.resultMessage != nil {
             try? await Task.sleep(for: .seconds(1))
             self.dismissCommandBar()
         }
+    }
+
+    /// Extracts mood or genre from natural language queries.
+    /// Transforms "something chill" → "chill music", "something upbeat" → "upbeat music"
+    private func extractMoodOrGenre(from query: String) -> String {
+        let lowered = query.lowercased()
+
+        // Handle "something like X" or "similar to X" patterns
+        if let likeMatch = self.extractSimilarArtist(from: lowered) {
+            return likeMatch
+        }
+
+        // Handle decade patterns: "something from the 80s" → "80s music"
+        if let decadeMatch = self.extractDecade(from: lowered) {
+            return decadeMatch
+        }
+
+        // Handle "for X" activity patterns: "music for studying" → "study music"
+        if let activityMatch = self.extractActivity(from: lowered) {
+            return activityMatch
+        }
+
+        // Mood/genre keywords to detect
+        let moodsAndGenres = [
+            // Moods
+            "chill", "relaxing", "calm", "peaceful", "mellow", "cozy",
+            "upbeat", "energetic", "hype", "pump", "intense",
+            "happy", "sad", "melancholy", "romantic", "love", "emotional",
+            "focus", "concentration", "sleep", "ambient", "dreamy",
+            "party", "dance", "groovy", "funky",
+            // Genres
+            "jazz", "rock", "pop", "hip hop", "hip-hop", "rap",
+            "classical", "electronic", "edm", "house", "techno",
+            "country", "folk", "indie", "alternative", "metal",
+            "r&b", "rnb", "soul", "blues", "reggae",
+            "latin", "k-pop", "kpop", "j-pop", "jpop",
+            // Styles
+            "instrumental", "acoustic", "lo-fi", "lofi", "orchestral",
+            "piano", "guitar", "vocal", "a cappella",
+        ]
+
+        // Patterns that indicate mood-based requests
+        let moodPatterns = ["something", "some", "anything", "music that", "songs that"]
+
+        // Check if this looks like a mood-based request
+        let isMoodRequest = moodPatterns.contains { lowered.contains($0) }
+
+        if isMoodRequest {
+            // Find which mood/genre keyword is present
+            for mood in moodsAndGenres where lowered.contains(mood) {
+                return "\(mood) music"
+            }
+        }
+
+        // Clean up filler words if no specific transformation
+        let fillerWords = ["some ", "something ", "anything "]
+        var cleaned = query
+        for filler in fillerWords where cleaned.lowercased().hasPrefix(filler) {
+            cleaned = String(cleaned.dropFirst(filler.count))
+            break
+        }
+
+        return cleaned
+    }
+
+    /// Extracts artist from "something like X" or "similar to X" patterns.
+    private func extractSimilarArtist(from query: String) -> String? {
+        let patterns = [
+            "something like ", "anything like ", "similar to ",
+            "artists like ", "songs like ", "music like ",
+        ]
+
+        for pattern in patterns {
+            if let range = query.range(of: pattern) {
+                let artist = String(query[range.upperBound...]).trimmingCharacters(in: .whitespaces)
+                if !artist.isEmpty {
+                    return artist
+                }
+            }
+        }
+        return nil
+    }
+
+    /// Extracts decade from patterns like "from the 80s" or "90s hits".
+    private func extractDecade(from query: String) -> String? {
+        // Match patterns like "80s", "90s", "2000s"
+        let decadePattern = #"(19)?(20)?\d0s"#
+        if let regex = try? NSRegularExpression(pattern: decadePattern),
+           let match = regex.firstMatch(in: query, range: NSRange(query.startIndex..., in: query)),
+           let range = Range(match.range, in: query)
+        {
+            let decade = String(query[range])
+            // If query has filler words, return clean decade search
+            if query.contains("something") || query.contains("from the") {
+                return "\(decade) music"
+            }
+        }
+        return nil
+    }
+
+    /// Extracts activity from "for X" patterns.
+    private func extractActivity(from query: String) -> String? {
+        let activityMappings = [
+            "for studying": "study music",
+            "for working out": "workout music",
+            "for running": "running music",
+            "for sleeping": "sleep music",
+            "for meditation": "meditation music",
+            "for cooking": "cooking music",
+            "for driving": "driving music",
+            "for reading": "reading music",
+            "for work": "focus music",
+            "for coding": "coding music",
+            "to study": "study music",
+            "to sleep": "sleep music",
+            "to relax": "relaxing music",
+            "to work out": "workout music",
+        ]
+
+        for (pattern, replacement) in activityMappings where query.contains(pattern) {
+            return replacement
+        }
+        return nil
     }
 
     private func executeIntent(_ intent: MusicIntent) async {

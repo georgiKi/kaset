@@ -24,6 +24,7 @@ final class ExploreViewModelTests: XCTestCase {
 
     func testLoadSuccess() async {
         // Given
+        // Note: "Charts" section is filtered out by ExploreViewModel since it's in the sidebar
         let expectedSections = [
             TestFixtures.makeHomeSection(title: "New releases"),
             TestFixtures.makeHomeSection(title: "Charts"),
@@ -37,8 +38,10 @@ final class ExploreViewModelTests: XCTestCase {
         // Then
         XCTAssertTrue(self.mockClient.getExploreCalled)
         XCTAssertEqual(self.viewModel.loadingState, .loaded)
-        XCTAssertEqual(self.viewModel.sections.count, 3)
+        // "Charts" section is filtered out, so we expect 2 sections
+        XCTAssertEqual(self.viewModel.sections.count, 2)
         XCTAssertEqual(self.viewModel.sections[0].title, "New releases")
+        XCTAssertEqual(self.viewModel.sections[1].title, "Moods & genres")
     }
 
     func testLoadError() async {

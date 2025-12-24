@@ -1,6 +1,7 @@
 import XCTest
 
 /// UI tests for the PlayerBar.
+@MainActor
 final class PlayerBarUITests: KasetUITestCase {
     // MARK: - Player Bar Visibility
 

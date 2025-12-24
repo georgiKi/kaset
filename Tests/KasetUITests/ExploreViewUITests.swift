@@ -1,6 +1,7 @@
 import XCTest
 
 /// UI tests for the ExploreView.
+@MainActor
 final class ExploreViewUITests: KasetUITestCase {
     // MARK: - Basic Display
 

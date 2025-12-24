@@ -33,14 +33,25 @@ final class PlaylistDetailViewModel {
         do {
             var detail = try await client.getPlaylist(id: self.playlist.id)
 
-            // Use original playlist info as fallback if API returned unknown/empty values
-            if detail.title == "Unknown Playlist", self.playlist.title != "Unknown Playlist" {
-                // Merge with original playlist info
+            // Determine the best thumbnail to use:
+            // 1. API response header thumbnail
+            // 2. Original playlist thumbnail (from navigation)
+            // 3. First track's thumbnail as fallback
+            let resolvedThumbnailURL = detail.thumbnailURL
+                ?? self.playlist.thumbnailURL
+                ?? detail.tracks.first?.thumbnailURL
+
+            // Check if we need to merge with original playlist info
+            let needsMerge = detail.title == "Unknown Playlist" && self.playlist.title != "Unknown Playlist"
+            let thumbnailMissing = detail.thumbnailURL == nil && resolvedThumbnailURL != nil
+
+            if needsMerge || thumbnailMissing {
+                // Merge with original playlist info or add fallback thumbnail
                 let mergedPlaylist = Playlist(
                     id: playlist.id,
-                    title: self.playlist.title,
+                    title: needsMerge ? self.playlist.title : detail.title,
                     description: detail.description ?? self.playlist.description,
-                    thumbnailURL: detail.thumbnailURL ?? self.playlist.thumbnailURL,
+                    thumbnailURL: resolvedThumbnailURL,
                     trackCount: detail.tracks.count,
                     author: detail.author ?? self.playlist.author
                 )

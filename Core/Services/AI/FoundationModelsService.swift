@@ -7,36 +7,32 @@ import os
 
 /// Defines the type of AI session to create, each optimized for specific use cases.
 ///
-/// Different session types use different temperature settings:
-/// - **Command sessions**: Lower temperature (0.7) for more predictable intent parsing
-/// - **Analysis sessions**: Higher temperature (1.2) for creative lyric analysis
-/// - **Conversational sessions**: Balanced temperature (1.0) for natural dialogue
+/// Session types help organize the code and provide semantic meaning,
+/// but note that Apple's Foundation Models framework does not expose
+/// temperature control in macOS 26. All sessions use the system default.
 @available(macOS 26.0, *)
-enum AISessionType {
+enum AISessionType: String, CaseIterable, Sendable {
     /// Quick command parsing (play, skip, queue, etc.)
-    /// Uses lower temperature for predictable structured output.
+    /// Best for predictable structured output.
     case command
 
     /// Creative analysis (lyrics explanation, recommendations)
-    /// Uses higher temperature for more insightful, varied responses.
+    /// Best for more insightful, varied responses.
     case analysis
 
     /// Multi-turn conversation (future use)
-    /// Uses balanced temperature for natural dialogue.
+    /// Best for natural dialogue.
     case conversational
 
-    /// Default generation options for this session type.
-    var generationOptions: GenerationOptions {
+    /// Human-readable description for logging and debugging.
+    var description: String {
         switch self {
         case .command:
-            // Lower temperature for more deterministic intent parsing
-            GenerationOptions(temperature: 0.7)
+            "Command parsing (structured output)"
         case .analysis:
-            // Higher temperature for creative, insightful analysis
-            GenerationOptions(temperature: 1.2)
+            "Creative analysis (insightful responses)"
         case .conversational:
-            // Balanced for natural conversation
-            GenerationOptions(temperature: 1.0)
+            "Conversational (multi-turn dialogue)"
         }
     }
 }
@@ -230,19 +226,6 @@ final class FoundationModelsService {
     @available(*, deprecated, message: "Use createCommandSession for tool-based sessions")
     func createSession(instructions: String, tools: [any Tool]) -> LanguageModelSession? {
         self.createCommandSession(instructions: instructions, tools: tools)
-    }
-
-    // MARK: - Generation Options
-
-    /// Returns the recommended generation options for a session type.
-    ///
-    /// Use these options when calling `session.respond(to:generating:options:)`
-    /// to optimize generation for the specific use case.
-    ///
-    /// - Parameter type: The type of session/task.
-    /// - Returns: Configured GenerationOptions with appropriate temperature.
-    func generationOptions(for type: AISessionType) -> GenerationOptions {
-        type.generationOptions
     }
 
     /// Clears any cached session state.

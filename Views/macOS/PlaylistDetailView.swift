@@ -19,6 +19,9 @@ struct PlaylistDetailView: View {
     /// AI-generated playlist changes.
     @State private var playlistChanges: PlaylistChanges?
 
+    /// Partial playlist changes during streaming.
+    @State private var partialChanges: PlaylistChanges.PartiallyGenerated?
+
     /// Whether AI is processing the refine request.
     @State private var isRefining: Bool = false
 
@@ -76,6 +79,7 @@ struct PlaylistDetailView: View {
                     tracks: detail.tracks,
                     isProcessing: self.$isRefining,
                     changes: self.$playlistChanges,
+                    partialChanges: self.$partialChanges,
                     errorMessage: self.$refineError,
                     onRefine: { prompt in
                         await self.refinePlaylist(tracks: detail.tracks, prompt: prompt)
@@ -317,7 +321,7 @@ struct PlaylistDetailView: View {
                     id: album.id,
                     title: album.title,
                     description: nil,
-                    thumbnailURL: album.thumbnailURL,
+                    thumbnailURL: album.thumbnailURL ?? track.thumbnailURL,
                     trackCount: album.trackCount,
                     author: album.artistsDisplay
                 )
@@ -360,6 +364,7 @@ struct PlaylistDetailView: View {
         self.isRefining = true
         self.refineError = nil
         self.playlistChanges = nil
+        self.partialChanges = nil
 
         self.logger.info("Refining playlist with prompt: \(prompt)")
 
@@ -399,9 +404,26 @@ struct PlaylistDetailView: View {
         """
 
         do {
-            let response = try await session.respond(to: userPrompt, generating: PlaylistChanges.self)
-            self.playlistChanges = response.content
-            self.logger.info("Got playlist changes: \(response.content.removals.count) removals")
+            // Use streaming for progressive UI updates
+            let stream = session.streamResponse(to: userPrompt, generating: PlaylistChanges.self)
+
+            for try await snapshot in stream {
+                // Update partial content for streaming UI
+                self.partialChanges = snapshot.content
+            }
+
+            // Stream complete - convert final partial to complete changes
+            if let final = self.partialChanges,
+               let removals = final.removals,
+               let reasoning = final.reasoning
+            {
+                self.playlistChanges = PlaylistChanges(
+                    removals: removals,
+                    reorderedIds: final.reorderedIds,
+                    reasoning: reasoning
+                )
+                self.logger.info("Got playlist changes: \(removals.count) removals")
+            }
         } catch {
             // Use centralized error handler for consistent messaging
             if let message = AIErrorHandler.handleAndMessage(error, context: "playlist refinement") {
@@ -409,6 +431,7 @@ struct PlaylistDetailView: View {
             }
         }
 
+        self.partialChanges = nil
         self.isRefining = false
     }
 }
@@ -420,6 +443,7 @@ private struct RefinePlaylistSheet: View {
     let tracks: [Song]
     @Binding var isProcessing: Bool
     @Binding var changes: PlaylistChanges?
+    @Binding var partialChanges: PlaylistChanges.PartiallyGenerated?
     @Binding var errorMessage: String?
     let onRefine: (String) async -> Void
     let onApply: () -> Void
@@ -449,7 +473,11 @@ private struct RefinePlaylistSheet: View {
 
             // Content
             if self.isProcessing {
-                self.loadingView
+                if let partial = partialChanges {
+                    self.streamingChangesView(partial)
+                } else {
+                    self.loadingView
+                }
             } else if let changes {
                 self.changesView(changes)
             } else {
@@ -472,6 +500,72 @@ private struct RefinePlaylistSheet: View {
                 .foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    /// Shows partial changes as they stream in from the AI.
+    private func streamingChangesView(_ partial: PlaylistChanges.PartiallyGenerated) -> some View {
+        VStack(alignment: .leading, spacing: 16) {
+            // Reasoning (shows as it streams)
+            HStack(spacing: 8) {
+                ProgressView()
+                    .controlSize(.small)
+                    .scaleEffect(0.6)
+                    .frame(width: 10, height: 10)
+                if let reasoning = partial.reasoning {
+                    Text(reasoning)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                } else {
+                    Text("Analyzing...")
+                        .font(.subheadline)
+                        .foregroundStyle(.tertiary)
+                }
+            }
+            .padding(.horizontal)
+
+            Divider()
+
+            // Changes list (shows as items stream in)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 8) {
+                    if let removals = partial.removals, !removals.isEmpty {
+                        Text("Suggested Removals")
+                            .font(.caption)
+                            .foregroundStyle(.tertiary)
+                            .textCase(.uppercase)
+
+                        ForEach(removals, id: \.self) { videoId in
+                            if let track = tracks.first(where: { $0.videoId == videoId }) {
+                                HStack {
+                                    Image(systemName: "minus.circle.fill")
+                                        .foregroundStyle(.red)
+                                    Text(track.title)
+                                        .lineLimit(1)
+                                    Spacer()
+                                    Text(track.artistsDisplay)
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                        .lineLimit(1)
+                                }
+                                .padding(.vertical, 4)
+                            }
+                        }
+                    }
+                }
+                .padding(.horizontal)
+            }
+
+            Spacer()
+
+            // Disabled actions during streaming
+            HStack {
+                Spacer()
+                Text("Processing...")
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+            }
+            .padding()
+        }
     }
 
     private var promptView: some View {

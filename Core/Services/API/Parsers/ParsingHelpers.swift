@@ -71,6 +71,21 @@ enum ParsingHelpers {
             }
         }
 
+        // Try foregroundThumbnail (used by some album/artist headers)
+        if let foregroundThumbnail = data["foregroundThumbnail"] as? [String: Any] {
+            if let musicThumbnailRenderer = foregroundThumbnail["musicThumbnailRenderer"] as? [String: Any],
+               let thumbData = musicThumbnailRenderer["thumbnail"] as? [String: Any],
+               let thumbnails = thumbData["thumbnails"] as? [[String: Any]]
+            {
+                return thumbnails.compactMap { $0["url"] as? String }.map(self.normalizeURL)
+            }
+        }
+
+        // Try direct thumbnails array at top level
+        if let thumbnails = data["thumbnails"] as? [[String: Any]] {
+            return thumbnails.compactMap { $0["url"] as? String }.map(self.normalizeURL)
+        }
+
         return []
     }
 
@@ -318,5 +333,50 @@ enum ParsingHelpers {
         }
 
         return artists
+    }
+
+    /// Extracts album from flex columns.
+    /// Album info is typically in the second or third flex column with a browseId starting with MPRE or OLAK.
+    static func extractAlbumFromFlexColumns(_ data: [String: Any]) -> Album? {
+        guard let flexColumns = data["flexColumns"] as? [[String: Any]] else {
+            return nil
+        }
+
+        // Album is typically in the second or third column
+        // Look through columns 1, 2, and 3 (indices 1, 2, 3) for album data
+        for columnIndex in 1 ..< min(4, flexColumns.count) {
+            guard let column = flexColumns[safe: columnIndex],
+                  let renderer = column["musicResponsiveListItemFlexColumnRenderer"] as? [String: Any],
+                  let text = renderer["text"] as? [String: Any],
+                  let runs = text["runs"] as? [[String: Any]]
+            else {
+                continue
+            }
+
+            // Look for a run with a navigation endpoint pointing to an album
+            for run in runs {
+                guard let albumName = run["text"] as? String,
+                      !albumName.isEmpty,
+                      albumName != " • ", albumName != " & ", albumName != ", ",
+                      let endpoint = run["navigationEndpoint"] as? [String: Any],
+                      let browseEndpoint = endpoint["browseEndpoint"] as? [String: Any],
+                      let browseId = browseEndpoint["browseId"] as? String,
+                      browseId.hasPrefix("MPRE") || browseId.hasPrefix("OLAK")
+                else {
+                    continue
+                }
+
+                return Album(
+                    id: browseId,
+                    title: albumName,
+                    artists: nil,
+                    thumbnailURL: nil,
+                    year: nil,
+                    trackCount: nil
+                )
+            }
+        }
+
+        return nil
     }
 }

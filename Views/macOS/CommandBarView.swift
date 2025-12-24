@@ -131,40 +131,91 @@ struct CommandBarView: View {
 
     private var suggestionsView: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Try commands like:")
+            Text(self.suggestionsHeaderText)
                 .font(.caption)
                 .foregroundStyle(.tertiary)
 
+            // First row: contextual suggestions based on playback state
             HStack(spacing: 8) {
-                SuggestionChip(text: "Play something chill") {
-                    self.executeSuggestion("Play something chill")
-                }
-
-                SuggestionChip(text: "Add jazz to queue") {
-                    self.executeSuggestion("Add jazz to queue")
-                }
-
-                SuggestionChip(text: "Shuffle my queue") {
-                    self.executeSuggestion("Shuffle my queue")
+                ForEach(self.contextualSuggestions.prefix(3), id: \.self) { suggestion in
+                    SuggestionChip(text: suggestion) {
+                        self.executeSuggestion(suggestion)
+                    }
                 }
             }
 
+            // Second row: discovery suggestions
             HStack(spacing: 8) {
-                SuggestionChip(text: "Skip this song") {
-                    self.executeSuggestion("Skip this song")
-                }
-
-                SuggestionChip(text: "I like this") {
-                    self.executeSuggestion("I like this")
-                }
-
-                SuggestionChip(text: "Clear queue") {
-                    self.executeSuggestion("Clear queue")
+                ForEach(self.discoverySuggestions.prefix(3), id: \.self) { suggestion in
+                    SuggestionChip(text: suggestion) {
+                        self.executeSuggestion(suggestion)
+                    }
                 }
             }
         }
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    /// Header text for suggestions, contextual based on playback state.
+    private var suggestionsHeaderText: String {
+        if self.playerService.currentTrack != nil {
+            "What would you like to do?"
+        } else if !self.playerService.queue.isEmpty {
+            "Your queue is ready:"
+        } else {
+            "Try commands like:"
+        }
+    }
+
+    /// Suggestions that adapt to current playback context.
+    private var contextualSuggestions: [String] {
+        var suggestions: [String] = []
+
+        if let track = playerService.currentTrack {
+            // We have a track playing - offer relevant actions
+            if self.playerService.isPlaying {
+                suggestions.append("Pause")
+            } else {
+                suggestions.append("Resume")
+            }
+
+            // Offer to find similar music based on current track
+            let artist = track.artists.first?.name ?? ""
+            if !artist.isEmpty {
+                suggestions.append("Play more by \(artist)")
+            } else {
+                suggestions.append("Play more like this")
+            }
+
+            suggestions.append("I like this")
+        } else if !self.playerService.queue.isEmpty {
+            // Queue exists but nothing playing
+            suggestions.append("Play")
+            suggestions.append("Shuffle my queue")
+            suggestions.append("Clear queue")
+        } else {
+            // No playback state - offer discovery
+            suggestions.append("Play something chill")
+            suggestions.append("Play top hits")
+            suggestions.append("Shuffle my library")
+        }
+
+        return suggestions
+    }
+
+    /// Suggestions for discovering new music.
+    private var discoverySuggestions: [String] {
+        if self.playerService.currentTrack != nil {
+            // Playing something - offer queue and discovery actions
+            return ["Add jazz to queue", "Skip this song", "What's in my queue?"]
+        } else if !self.playerService.queue.isEmpty {
+            // Queue exists - offer to modify it
+            return ["Add more songs", "Play something different", "Start over"]
+        } else {
+            // Nothing going on - offer pure discovery
+            return ["Play upbeat music", "Workout playlist", "Something to focus"]
+        }
     }
 
     // MARK: - Actions

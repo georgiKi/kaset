@@ -74,7 +74,6 @@ struct LoadingView: View {
     private var spinnerContent: some View {
         VStack(spacing: 16) {
             FixedProgressView(controlSize: .regular)
-                .pulse(minScale: 0.95, maxScale: 1.05, duration: 1.2)
             Text(self.message)
                 .foregroundStyle(.secondary)
         }

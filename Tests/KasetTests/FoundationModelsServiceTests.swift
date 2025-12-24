@@ -116,32 +116,6 @@ struct FoundationModelsServiceTests {
         service.isDisabledByUser = originalDisabled
     }
 
-    // MARK: - Generation Options Tests
-
-    @Test("generationOptions returns correct values for command type")
-    func generationOptionsCommand() {
-        let service = FoundationModelsService.shared
-        let options = service.generationOptions(for: .command)
-
-        #expect(options != nil)
-    }
-
-    @Test("generationOptions returns correct values for analysis type")
-    func generationOptionsAnalysis() {
-        let service = FoundationModelsService.shared
-        let options = service.generationOptions(for: .analysis)
-
-        #expect(options != nil)
-    }
-
-    @Test("generationOptions returns correct values for conversational type")
-    func generationOptionsConversational() {
-        let service = FoundationModelsService.shared
-        let options = service.generationOptions(for: .conversational)
-
-        #expect(options != nil)
-    }
-
     // MARK: - Clear Context Test
 
     @Test("clearContext does not throw")
@@ -153,21 +127,27 @@ struct FoundationModelsServiceTests {
     }
 }
 
-// MARK: - AISessionTypeTests Extended
+// MARK: - AISessionTypeExtendedTests
 
 @available(macOS 26.0, *)
 @Suite("AISessionType Extended", .tags(.api))
 struct AISessionTypeExtendedTests {
     @Test(
-        "All session types have generation options",
+        "All session types have descriptions",
         arguments: [
             AISessionType.command,
             AISessionType.analysis,
             AISessionType.conversational,
         ]
     )
-    func allSessionTypesHaveOptions(type: AISessionType) {
-        let options = type.generationOptions
-        #expect(options != nil)
+    func allSessionTypesHaveDescriptions(type: AISessionType) {
+        let description = type.description
+        #expect(!description.isEmpty)
+    }
+
+    @Test("AISessionType is CaseIterable")
+    func sessionTypeIsCaseIterable() {
+        let allCases = AISessionType.allCases
+        #expect(allCases.count == 3)
     }
 }

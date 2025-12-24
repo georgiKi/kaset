@@ -39,6 +39,29 @@ struct IntelligenceSettingsView: View {
                     .foregroundStyle(.secondary)
             }
 
+            // AI Features section with keyboard shortcut info
+            Section {
+                HStack {
+                    Image(systemName: "command")
+                        .foregroundStyle(.secondary)
+                    Text("Command Bar")
+                    Spacer()
+                    Text("⌘K")
+                        .font(.caption.monospaced())
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(.quaternary)
+                        .clipShape(RoundedRectangle(cornerRadius: 4))
+                }
+
+                Text("Open the command bar to control music with natural language. Try saying \"play something chill\" or \"add jazz to queue\".")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } header: {
+                Text("Quick Access")
+            }
+
             Section {
                 Button("Clear AI Context") {
                     self.aiService.clearContext()
@@ -83,8 +106,8 @@ struct IntelligenceSettingsView: View {
             Image(systemName: "sparkles")
                 .foregroundStyle(.purple)
                 .font(.system(size: 24))
-        case .unavailable:
-            Image(systemName: "exclamationmark.triangle.fill")
+        case let .unavailable(reason):
+            Image(systemName: self.iconForUnavailableReason(reason))
                 .foregroundStyle(.orange)
                 .font(.system(size: 24))
         @unknown default:
@@ -98,8 +121,8 @@ struct IntelligenceSettingsView: View {
         switch self.aiService.availability {
         case .available:
             "Available"
-        case .unavailable:
-            "Unavailable"
+        case let .unavailable(reason):
+            self.titleForUnavailableReason(reason)
         @unknown default:
             "Unknown"
         }
@@ -109,10 +132,60 @@ struct IntelligenceSettingsView: View {
         switch self.aiService.availability {
         case .available:
             "Apple Intelligence is ready to use"
-        case .unavailable:
-            "Apple Intelligence is unavailable on this device or not enabled"
+        case let .unavailable(reason):
+            self.descriptionForUnavailableReason(reason)
         @unknown default:
             "Unable to determine availability"
+        }
+    }
+
+    // MARK: - Unavailability Reason Helpers
+
+    /// Returns the appropriate icon for the unavailability reason.
+    private func iconForUnavailableReason(_ reason: some Any) -> String {
+        let reasonString = String(describing: reason)
+        if reasonString.contains("deviceNotSupported") {
+            return "desktopcomputer.trianglebadge.exclamationmark"
+        } else if reasonString.contains("modelNotReady") {
+            return "arrow.down.circle"
+        } else if reasonString.contains("appleIntelligenceNotEnabled") {
+            return "gearshape.circle"
+        } else if reasonString.contains("languageNotSupported") {
+            return "globe"
+        } else {
+            return "exclamationmark.triangle.fill"
+        }
+    }
+
+    /// Returns a short title for the unavailability reason.
+    private func titleForUnavailableReason(_ reason: some Any) -> String {
+        let reasonString = String(describing: reason)
+        if reasonString.contains("deviceNotSupported") {
+            return "Not Supported"
+        } else if reasonString.contains("modelNotReady") {
+            return "Downloading"
+        } else if reasonString.contains("appleIntelligenceNotEnabled") {
+            return "Not Enabled"
+        } else if reasonString.contains("languageNotSupported") {
+            return "Language Not Supported"
+        } else {
+            return "Unavailable"
+        }
+    }
+
+    /// Returns a user-friendly description for the unavailability reason.
+    private func descriptionForUnavailableReason(_ reason: some Any) -> String {
+        let reasonString = String(describing: reason)
+        if reasonString.contains("deviceNotSupported") {
+            return "This Mac doesn't support Apple Intelligence. An Apple Silicon Mac is required."
+        } else if reasonString.contains("modelNotReady") {
+            return "Apple Intelligence is downloading. This may take a few minutes."
+        } else if reasonString.contains("appleIntelligenceNotEnabled") {
+            return "Enable Apple Intelligence in System Settings to use AI features."
+        } else if reasonString.contains("languageNotSupported") {
+            return "Change your system language to English or another supported language."
+        } else {
+            return "Apple Intelligence is currently unavailable."
         }
     }
 }

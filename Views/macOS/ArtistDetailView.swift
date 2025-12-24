@@ -339,7 +339,7 @@ struct ArtistDetailView: View {
                     id: album.id,
                     title: album.title,
                     description: nil,
-                    thumbnailURL: album.thumbnailURL,
+                    thumbnailURL: album.thumbnailURL ?? song.thumbnailURL,
                     trackCount: album.trackCount,
                     author: album.artistsDisplay
                 )

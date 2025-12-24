@@ -58,7 +58,7 @@ struct LoadingError: Sendable {
     }
 }
 
-// MARK: - LoadingState Equatable
+// MARK: - LoadingState + Equatable
 
 extension LoadingState: Equatable {
     static func == (lhs: LoadingState, rhs: LoadingState) -> Bool {

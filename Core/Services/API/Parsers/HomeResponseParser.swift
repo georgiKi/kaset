@@ -410,12 +410,13 @@ enum HomeResponseParser {
         let thumbnails = ParsingHelpers.extractThumbnails(from: data)
         let thumbnailURL = thumbnails.last.flatMap { URL(string: $0) }
         let duration = ParsingHelpers.extractDurationFromFlexColumns(data)
+        let album = ParsingHelpers.extractAlbumFromFlexColumns(data)
 
         let song = Song(
             id: videoId,
             title: title,
             artists: artists,
-            album: nil,
+            album: album,
             duration: duration,
             thumbnailURL: thumbnailURL,
             videoId: videoId

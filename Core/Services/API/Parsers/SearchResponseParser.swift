@@ -231,12 +231,13 @@ enum SearchResponseParser {
         let thumbnailURL = thumbnails.last.flatMap { URL(string: $0) }
         let title = ParsingHelpers.extractTitleFromFlexColumns(data) ?? "Unknown"
         let artists = ParsingHelpers.extractArtistsFromFlexColumns(data)
+        let album = ParsingHelpers.extractAlbumFromFlexColumns(data)
 
         let song = Song(
             id: videoId,
             title: title,
             artists: artists,
-            album: nil,
+            album: album,
             duration: nil,
             thumbnailURL: thumbnailURL,
             videoId: videoId

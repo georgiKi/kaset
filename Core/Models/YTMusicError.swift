@@ -77,7 +77,7 @@ enum YTMusicError: LocalizedError, Sendable {
         case .networkError:
             // Network issues are often transient
             return true
-        case .apiError(_, let code):
+        case let .apiError(_, code):
             // Server errors (5xx) are retryable, client errors (4xx) usually aren't
             if let code {
                 return code >= 500
@@ -122,7 +122,7 @@ enum YTMusicError: LocalizedError, Sendable {
             "Please sign in to access this content."
         case .networkError:
             "Unable to connect. Please check your internet connection."
-        case .apiError(_, let code):
+        case let .apiError(_, code):
             if let code {
                 "Something went wrong (Error \(code))."
             } else {
@@ -132,7 +132,7 @@ enum YTMusicError: LocalizedError, Sendable {
             "Unable to load content. Please try again."
         case .playbackError:
             "Unable to play this track. Try a different one."
-        case .unknown(let message):
+        case let .unknown(message):
             message
         }
     }

@@ -72,6 +72,8 @@ jobs:
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO \
+            ARCHS="arm64 x86_64" \
+            ONLY_ACTIVE_ARCH=NO \
             MARKETING_VERSION="${{ steps.version.outputs.version }}" \
             CURRENT_PROJECT_VERSION="${{ github.run_number }}" \
             build
@@ -104,7 +106,8 @@ jobs:
           ARCHS=$(lipo -archs "$APP_PATH/Contents/MacOS/Kaset" 2>/dev/null || echo "unknown")
           echo "Architectures: $ARCHS"
           if [[ "$ARCHS" != *"x86_64"* ]] || [[ "$ARCHS" != *"arm64"* ]]; then
-            echo "Warning: App is not a Universal Binary (found: $ARCHS)"
+            echo "Error: App is not a Universal Binary (found: $ARCHS)"
+            exit 1
           fi
 
           # Create styled DMG with Applications symlink

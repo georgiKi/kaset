@@ -27,6 +27,8 @@ enum PaginatedContentType: String, Hashable, Sendable {
     }
 }
 
+// MARK: - YTMusicClient
+
 /// Client for making authenticated requests to YouTube Music's internal API.
 @MainActor
 final class YTMusicClient: YTMusicClientProtocol {
@@ -116,93 +118,93 @@ final class YTMusicClient: YTMusicClientProtocol {
     /// Fetches the home page content (initial sections only for fast display).
     /// Call `getHomeContinuation` to load additional sections progressively.
     func getHome() async throws -> HomeResponse {
-        try await fetchPaginatedContent(type: .home)
+        try await self.fetchPaginatedContent(type: .home)
     }
 
     /// Fetches the next batch of home sections via continuation.
     /// Returns nil if no more sections are available.
     func getHomeContinuation() async throws -> [HomeSection]? {
-        try await fetchContinuation(type: .home)
+        try await self.fetchContinuation(type: .home)
     }
 
     /// Whether more home sections are available to load.
     var hasMoreHomeSections: Bool {
-        hasMoreSections(for: .home)
+        self.hasMoreSections(for: .home)
     }
 
     /// Fetches the explore page content (initial sections only for fast display).
     func getExplore() async throws -> HomeResponse {
-        try await fetchPaginatedContent(type: .explore)
+        try await self.fetchPaginatedContent(type: .explore)
     }
 
     /// Fetches the next batch of explore sections via continuation.
     func getExploreContinuation() async throws -> [HomeSection]? {
-        try await fetchContinuation(type: .explore)
+        try await self.fetchContinuation(type: .explore)
     }
 
     /// Whether more explore sections are available to load.
     var hasMoreExploreSections: Bool {
-        hasMoreSections(for: .explore)
+        self.hasMoreSections(for: .explore)
     }
 
     /// Fetches the charts page content (initial sections only for fast display).
     func getCharts() async throws -> HomeResponse {
-        try await fetchPaginatedContent(type: .charts)
+        try await self.fetchPaginatedContent(type: .charts)
     }
 
     /// Fetches the next batch of charts sections via continuation.
     func getChartsContinuation() async throws -> [HomeSection]? {
-        try await fetchContinuation(type: .charts)
+        try await self.fetchContinuation(type: .charts)
     }
 
     /// Whether more charts sections are available to load.
     var hasMoreChartsSections: Bool {
-        hasMoreSections(for: .charts)
+        self.hasMoreSections(for: .charts)
     }
 
     /// Fetches the moods and genres page content (initial sections only for fast display).
     func getMoodsAndGenres() async throws -> HomeResponse {
-        try await fetchPaginatedContent(type: .moodsAndGenres)
+        try await self.fetchPaginatedContent(type: .moodsAndGenres)
     }
 
     /// Fetches the next batch of moods and genres sections via continuation.
     func getMoodsAndGenresContinuation() async throws -> [HomeSection]? {
-        try await fetchContinuation(type: .moodsAndGenres)
+        try await self.fetchContinuation(type: .moodsAndGenres)
     }
 
     /// Whether more moods and genres sections are available to load.
     var hasMoreMoodsAndGenresSections: Bool {
-        hasMoreSections(for: .moodsAndGenres)
+        self.hasMoreSections(for: .moodsAndGenres)
     }
 
     /// Fetches the new releases page content (initial sections only for fast display).
     func getNewReleases() async throws -> HomeResponse {
-        try await fetchPaginatedContent(type: .newReleases)
+        try await self.fetchPaginatedContent(type: .newReleases)
     }
 
     /// Fetches the next batch of new releases sections via continuation.
     func getNewReleasesContinuation() async throws -> [HomeSection]? {
-        try await fetchContinuation(type: .newReleases)
+        try await self.fetchContinuation(type: .newReleases)
     }
 
     /// Whether more new releases sections are available to load.
     var hasMoreNewReleasesSections: Bool {
-        hasMoreSections(for: .newReleases)
+        self.hasMoreSections(for: .newReleases)
     }
 
     /// Fetches the podcasts page content (initial sections only for fast display).
     func getPodcasts() async throws -> HomeResponse {
-        try await fetchPaginatedContent(type: .podcasts)
+        try await self.fetchPaginatedContent(type: .podcasts)
     }
 
     /// Fetches the next batch of podcasts sections via continuation.
     func getPodcastsContinuation() async throws -> [HomeSection]? {
-        try await fetchContinuation(type: .podcasts)
+        try await self.fetchContinuation(type: .podcasts)
     }
 
     /// Whether more podcasts sections are available to load.
     var hasMorePodcastsSections: Bool {
-        hasMoreSections(for: .podcasts)
+        self.hasMoreSections(for: .podcasts)
     }
 
     /// Makes a continuation request.

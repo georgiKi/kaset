@@ -248,12 +248,13 @@ enum ArtistParser {
             let thumbnails = ParsingHelpers.extractThumbnails(from: responsiveRenderer)
             let thumbnailURL = thumbnails.last.flatMap { URL(string: $0) } ?? fallbackThumbnailURL
             let duration = ParsingHelpers.extractDurationFromFlexColumns(responsiveRenderer)
+            let album = ParsingHelpers.extractAlbumFromFlexColumns(responsiveRenderer)
 
             let track = Song(
                 id: videoId,
                 title: title,
                 artists: artists,
-                album: nil,
+                album: album,
                 duration: duration,
                 thumbnailURL: thumbnailURL,
                 videoId: videoId

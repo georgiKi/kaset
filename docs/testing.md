@@ -54,58 +54,99 @@ New code in `Core/` (Services, Models, ViewModels, Utilities) must include unit 
 2. Add the test file to the Xcode project
 3. Run tests to verify
 
-### Test File Template
+### Test File Template (Swift Testing)
+
+> **Note:** This project uses Swift Testing (not XCTest). See [ADR-0006](adr/0006-swift-testing-migration.md) for migration details.
 
 ```swift
-import XCTest
+import Testing
 @testable import Kaset
 
+@Suite("MyService", .serialized, .tags(.service))
 @MainActor
-final class MyServiceTests: XCTestCase {
-    var sut: MyService!
+struct MyServiceTests {
+    let sut: MyService
+    let mockClient: MockYTMusicClient
 
-    override func setUp() async throws {
-        // Do NOT call super.setUp() in @MainActor async context
-        sut = MyService()
+    init() {
+        mockClient = MockYTMusicClient()
+        sut = MyService(client: mockClient)
     }
 
-    override func tearDown() async throws {
-        sut = nil
-        // Do NOT call super.tearDown() in @MainActor async context
-    }
-
-    func testSomething() async throws {
+    @Test("Does something correctly")
+    func doesSomething() async throws {
         // Arrange
-        // ...
+        mockClient.homeResponse = HomeResponse(sections: [], continuationToken: nil)
 
         // Act
         let result = try await sut.doSomething()
 
         // Assert
-        XCTAssertNotNil(result)
+        #expect(result != nil)
     }
 }
 ```
 
-### @MainActor Test Classes
+### Key Swift Testing Patterns
 
-For tests of `@MainActor` classes (most services), use async setUp/tearDown **without calling super**:
+| XCTest | Swift Testing |
+|--------|---------------|
+| `import XCTest` | `import Testing` |
+| `class ... : XCTestCase` | `@Suite struct ...` |
+| `func testFoo()` | `@Test func foo()` |
+| `XCTAssertEqual(a, b)` | `#expect(a == b)` |
+| `XCTAssertTrue(x)` | `#expect(x)` |
+| `XCTAssertNil(x)` | `#expect(x == nil)` |
+| `XCTAssertThrowsError` | `#expect(throws:)` |
+| `setUp()` / `tearDown()` | `init()` (ARC handles cleanup) |
+
+### @MainActor Test Suites
+
+For tests of `@MainActor` classes (most services), use `.serialized`:
 
 ```swift
+@Suite("PlayerService", .serialized, .tags(.service))
 @MainActor
-final class PlayerServiceTests: XCTestCase {
-    override func setUp() async throws {
-        // ⚠️ Do NOT call: try await super.setUp()
-        // XCTestCase is not Sendable, calling super crosses actor boundaries
+struct PlayerServiceTests {
+    let sut: PlayerService
+
+    init() {
+        sut = PlayerService()
     }
 
-    override func tearDown() async throws {
-        // ⚠️ Do NOT call: try await super.tearDown()
+    @Test("Initial state is idle")
+    func initialStateIsIdle() {
+        #expect(sut.isPlaying == false)
     }
 }
 ```
 
-**Why?** `XCTestCase` is not `Sendable`. Calling `super.setUp()` from a `@MainActor` async context sends `self` across actor boundaries, causing Swift 6 strict concurrency errors.
+**Why `.serialized`?** `@MainActor` tests must run serially to avoid race conditions. Swift Testing runs tests in parallel by default.
+
+### Test Tags
+
+Apply tags to categorize tests for filtering:
+
+```swift
+@Suite("HomeViewModel", .tags(.viewModel), .timeLimit(.minutes(1)))
+```
+
+Available tags: `.api`, `.parser`, `.viewModel`, `.service`, `.model`, `.slow`, `.integration`
+
+**Run by tag:**
+```bash
+# Run only parser tests
+xcodebuild test -scheme Kaset -only-testing:KasetTests -skip-testing:KasetUITests \
+  2>&1 | grep -E "parser"
+```
+
+### Time Limits
+
+Add `.timeLimit()` to async tests to prevent hangs:
+
+```swift
+@Suite("SearchViewModel", .serialized, .tags(.viewModel), .timeLimit(.minutes(1)))
+```
 
 ## Environment Isolation
 
@@ -141,32 +182,34 @@ MockURLProtocol.requestHandler = { request in
 Test business logic in isolation:
 
 ```swift
-func testAuthServiceLoginState() async {
-    // Given
+@Test("Login state transitions correctly")
+func authServiceLoginState() async {
     let authService = AuthService()
 
-    // When
     authService.startLogin()
 
-    // Then
-    XCTAssertEqual(authService.state, .loggingIn)
+    #expect(authService.state == .loggingIn)
 }
 ```
 
 ### Model Tests
 
-Test Codable conformance and parsing:
+Test parsing and computed properties:
 
 ```swift
-func testSongDecoding() throws {
-    let json = """
-    {"videoId": "abc123", "title": "Test Song", "artist": "Test Artist"}
-    """.data(using: .utf8)!
+@Test("Song parses duration from seconds field")
+func songDurationParsing() throws {
+    let data: [String: Any] = [
+        "videoId": "abc123",
+        "title": "Test Song",
+        "duration_seconds": 185.0,
+    ]
 
-    let song = try JSONDecoder().decode(Song.self, from: json)
+    let song = try #require(Song(from: data))
 
-    XCTAssertEqual(song.videoId, "abc123")
-    XCTAssertEqual(song.title, "Test Song")
+    #expect(song.videoId == "abc123")
+    #expect(song.duration == 185.0)
+    #expect(song.durationDisplay == "3:05")
 }
 ```
 
@@ -175,13 +218,16 @@ func testSongDecoding() throws {
 Test state management and loading:
 
 ```swift
-func testHomeViewModelLoading() async throws {
+@Test("Home loads sections from API")
+func homeViewModelLoading() async throws {
+    let mockClient = MockYTMusicClient()
+    mockClient.homeResponse = HomeResponse(sections: [makeSection()], continuationToken: nil)
     let viewModel = HomeViewModel(client: mockClient)
 
     await viewModel.load()
 
-    XCTAssertFalse(viewModel.isLoading)
-    XCTAssertFalse(viewModel.sections.isEmpty)
+    #expect(!viewModel.isLoading)
+    #expect(!viewModel.sections.isEmpty)
 }
 ```
 
@@ -190,16 +236,31 @@ func testHomeViewModelLoading() async throws {
 Test API response parsing with mock data:
 
 ```swift
-func testParseHomeResponse() {
+@Test("Parses home response with sections")
+func parseHomeResponse() {
     let data = makeHomeResponseData(sectionCount: 3)
 
     let (sections, token) = HomeResponseParser.parse(data)
 
-    XCTAssertEqual(sections.count, 3)
+    #expect(sections.count == 3)
 }
 ```
 
-Parser tests use helper methods to construct mock JSON structures, enabling comprehensive testing without network calls.
+### Parameterized Tests
+
+Test multiple inputs efficiently:
+
+```swift
+@Test("Duration formatting", arguments: [
+    (0.0, "0:00"),
+    (65.0, "1:05"),
+    (3661.0, "1:01:01"),
+])
+func durationFormatting(seconds: Double, expected: String) {
+    let song = makeSong(duration: seconds)
+    #expect(song.durationDisplay == expected)
+}
+```
 
 ## Mocking Guidelines
 

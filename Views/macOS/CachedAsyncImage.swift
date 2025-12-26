@@ -6,6 +6,9 @@ import SwiftUI
 /// Includes a smooth crossfade transition when the image loads.
 struct CachedAsyncImage<Content: View, Placeholder: View>: View {
     let url: URL?
+    /// Target size for image downsampling. Images are downsampled to this size to reduce memory usage.
+    /// Pass the actual display size of the image for optimal memory efficiency.
+    var targetSize: CGSize = .init(width: 320, height: 320)
     @ViewBuilder let content: (Image) -> Content
     @ViewBuilder let placeholder: () -> Placeholder
 
@@ -29,7 +32,7 @@ struct CachedAsyncImage<Content: View, Placeholder: View>: View {
         }
         .task(id: self.url) {
             guard let url else { return }
-            self.image = await ImageCache.shared.image(for: url)
+            self.image = await ImageCache.shared.image(for: url, targetSize: self.targetSize)
             self.isLoaded = true
         }
     }

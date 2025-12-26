@@ -427,7 +427,8 @@ final class SingletonPlayerWebView {
             let isPollingActive = false;
             let pollIntervalId = null;
             let lastUpdateTime = 0;
-            const UPDATE_THROTTLE_MS = 250; // Throttle updates to max 4/sec
+            const UPDATE_THROTTLE_MS = 500; // Throttle updates to max 2/sec
+            const POLL_INTERVAL_MS = 1000; // Poll at 1Hz during playback (reduced from 250ms)
 
             function waitForPlayerBar() {
                 const playerBar = document.querySelector('ytmusic-player-bar');
@@ -467,8 +468,8 @@ final class SingletonPlayerWebView {
                 if (isPollingActive) return;
                 isPollingActive = true;
                 sendUpdate(); // Immediate update
-                // Poll at ~4Hz during playback for smooth progress
-                pollIntervalId = setInterval(sendUpdate, 250);
+                // Poll at 1Hz during playback for progress updates (reduced CPU usage)
+                pollIntervalId = setInterval(sendUpdate, POLL_INTERVAL_MS);
             }
 
             function stopPolling() {

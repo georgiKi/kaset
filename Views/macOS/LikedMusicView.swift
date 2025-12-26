@@ -76,7 +76,8 @@ struct LikedMusicView: View {
                 if self.viewModel.songs.isEmpty {
                     self.emptyStateView
                 } else {
-                    ForEach(Array(self.viewModel.songs.enumerated()), id: \.element.id) { index, song in
+                    ForEach(self.viewModel.songs.indices, id: \.self) { index in
+                        let song = self.viewModel.songs[index]
                         self.songRow(song, index: index)
                         if index < self.viewModel.songs.count - 1 {
                             Divider()

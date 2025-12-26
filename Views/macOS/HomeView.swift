@@ -88,6 +88,9 @@ struct HomeView: View {
     private static let thumbnailDisplaySize = CGSize(width: 160, height: 160)
 
     private func prefetchImagesAsync(for section: HomeSection) async {
+        // Early exit if task is cancelled
+        guard !Task.isCancelled else { return }
+
         let urls = section.items.prefix(10).compactMap { $0.thumbnailURL?.highQualityThumbnailURL }
         guard !urls.isEmpty else { return }
 

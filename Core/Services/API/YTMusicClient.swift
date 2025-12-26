@@ -56,6 +56,7 @@ final class YTMusicClient: YTMusicClientProtocol {
         let configuration = URLSessionConfiguration.default
         configuration.httpAdditionalHeaders = [
             "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15",
+            "Accept-Encoding": "gzip, deflate, br",
         ]
         self.session = URLSession(configuration: configuration)
     }
@@ -497,10 +498,8 @@ final class YTMusicClient: YTMusicClientProtocol {
         _ = try await self.request(endpoint, body: body)
         self.logger.info("Successfully rated song \(videoId)")
 
-        // Invalidate liked playlist cache so UI updates immediately
-        APICache.shared.invalidate(matching: "browse:")
-        // Invalidate song metadata cache (next: endpoint)
-        APICache.shared.invalidate(matching: "next:")
+        // Invalidate mutation-affected caches in a single pass
+        APICache.shared.invalidateMutationCaches()
     }
 
     /// Adds or removes a song from the user's library.
@@ -520,9 +519,8 @@ final class YTMusicClient: YTMusicClientProtocol {
         _ = try await self.request("feedback", body: body)
         self.logger.info("Successfully edited library status")
 
-        // Invalidate library and song metadata cache so UI updates
-        APICache.shared.invalidate(matching: "browse:")
-        APICache.shared.invalidate(matching: "next:")
+        // Invalidate mutation-affected caches in a single pass
+        APICache.shared.invalidateMutationCaches()
     }
 
     /// Adds a playlist to the user's library using the like/like endpoint.
@@ -698,7 +696,7 @@ final class YTMusicClient: YTMusicClientProtocol {
         request.httpMethod = "POST"
 
         // Add auth headers
-        let headers = try await buildAuthHeaders()
+        let headers = try await self.buildAuthHeaders()
         for (key, value) in headers {
             request.setValue(value, forHTTPHeaderField: key)
         }
@@ -711,32 +709,71 @@ final class YTMusicClient: YTMusicClientProtocol {
 
         self.logger.debug("Making request to \(endpoint)")
 
-        let (data, response) = try await session.data(for: request)
+        // Perform network I/O off the main thread
+        let result = try await Self.performNetworkRequest(request: request, session: self.session)
 
-        guard let httpResponse = response as? HTTPURLResponse else {
-            throw YTMusicError.networkError(underlying: URLError(.badServerResponse))
-        }
-
-        // Handle auth errors
-        if httpResponse.statusCode == 401 || httpResponse.statusCode == 403 {
-            self.logger.error("Auth error: HTTP \(httpResponse.statusCode)")
+        // Handle errors back on main actor
+        switch result {
+        case let .success(data):
+            // Parse JSON - URLSession already decompresses gzip/deflate on a background thread,
+            // and JSONSerialization is very fast for typical response sizes (~5-15ms)
+            guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+                throw YTMusicError.parseError(message: "Response is not a JSON object")
+            }
+            return json
+        case let .authError(statusCode):
+            self.logger.error("Auth error: HTTP \(statusCode)")
             self.authService.sessionExpired()
             throw YTMusicError.authExpired
-        }
-
-        // Handle other errors
-        guard (200 ... 299).contains(httpResponse.statusCode) else {
-            self.logger.error("API error: HTTP \(httpResponse.statusCode)")
+        case let .httpError(statusCode):
+            self.logger.error("API error: HTTP \(statusCode)")
             throw YTMusicError.apiError(
-                message: "HTTP \(httpResponse.statusCode)",
-                code: httpResponse.statusCode
+                message: "HTTP \(statusCode)",
+                code: statusCode
             )
+        case let .networkError(error):
+            throw YTMusicError.networkError(underlying: error)
         }
+    }
 
-        guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-            throw YTMusicError.parseError(message: "Response is not a JSON object")
+    // MARK: - Nonisolated Network Helper
+
+    /// Result type for network request to avoid throwing across actor boundaries.
+    /// Uses Data (which is Sendable) instead of parsed JSON.
+    private enum NetworkResult: Sendable {
+        case success(Data)
+        case authError(statusCode: Int)
+        case httpError(statusCode: Int)
+        case networkError(Error)
+    }
+
+    // Performs network request off the main thread.
+    // Returns raw Data to be parsed on the caller's actor.
+    // swiftformat:disable:next modifierOrder
+    nonisolated private static func performNetworkRequest(
+        request: URLRequest,
+        session: URLSession
+    ) async throws -> NetworkResult {
+        do {
+            let (data, response) = try await session.data(for: request)
+
+            guard let httpResponse = response as? HTTPURLResponse else {
+                return .networkError(URLError(.badServerResponse))
+            }
+
+            // Handle auth errors
+            if httpResponse.statusCode == 401 || httpResponse.statusCode == 403 {
+                return .authError(statusCode: httpResponse.statusCode)
+            }
+
+            // Handle other HTTP errors
+            guard (200 ... 299).contains(httpResponse.statusCode) else {
+                return .httpError(statusCode: httpResponse.statusCode)
+            }
+
+            return .success(data)
+        } catch {
+            return .networkError(error)
         }
-
-        return json
     }
 }

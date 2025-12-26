@@ -75,8 +75,15 @@ final class APICache {
     /// Generates a stable, deterministic cache key from endpoint and request body.
     /// Uses SHA256 hash of sorted JSON to ensure consistency.
     static func stableCacheKey(endpoint: String, body: [String: Any]) -> String {
-        let sortedJSON = self.sortedJSONString(body)
-        let hash = SHA256.hash(data: Data(sortedJSON.utf8))
+        // Use JSONSerialization with .sortedKeys for deterministic output
+        // This is more efficient than custom recursive string building
+        let jsonData: Data = if #available(macOS 10.13, *) {
+            (try? JSONSerialization.data(withJSONObject: body, options: [.sortedKeys])) ?? Data()
+        } else {
+            // Fallback for older macOS (shouldn't happen with macOS 26 target)
+            (try? JSONSerialization.data(withJSONObject: body)) ?? Data()
+        }
+        let hash = SHA256.hash(data: jsonData)
         let hashString = hash.prefix(16).compactMap { String(format: "%02x", $0) }.joined()
         return "\(endpoint):\(hashString)"
     }
@@ -89,6 +96,15 @@ final class APICache {
     /// Invalidates entries matching the given prefix.
     func invalidate(matching prefix: String) {
         self.cache = self.cache.filter { !$0.key.hasPrefix(prefix) }
+    }
+
+    /// Invalidates all caches affected by mutation operations (like, library, feedback).
+    /// More efficient than multiple invalidate(matching:) calls as it iterates only once.
+    func invalidateMutationCaches() {
+        let mutationPrefixes = ["browse:", "next:", "like:"]
+        self.cache = self.cache.filter { entry in
+            !mutationPrefixes.contains { entry.key.hasPrefix($0) }
+        }
     }
 
     /// Returns current cache statistics for debugging.
@@ -110,39 +126,5 @@ final class APICache {
             return
         }
         self.cache.removeValue(forKey: lruKey)
-    }
-
-    /// Creates a sorted, deterministic JSON string from a dictionary.
-    private static func sortedJSONString(_ dict: [String: Any]) -> String {
-        do {
-            // Sort keys and serialize
-            let sortedDict = dict.sorted { $0.key < $1.key }
-            var result = "{"
-            for (index, (key, value)) in sortedDict.enumerated() {
-                if index > 0 { result += "," }
-                result += "\"\(key)\":\(self.stringValue(value))"
-            }
-            result += "}"
-            return result
-        }
-    }
-
-    /// Converts a value to a deterministic string representation.
-    private static func stringValue(_ value: Any) -> String {
-        switch value {
-        case let string as String:
-            return "\"\(string)\""
-        case let number as NSNumber:
-            return number.stringValue
-        case let bool as Bool:
-            return bool ? "true" : "false"
-        case let dict as [String: Any]:
-            return self.sortedJSONString(dict)
-        case let array as [Any]:
-            let items = array.map { self.stringValue($0) }.joined(separator: ",")
-            return "[\(items)]"
-        default:
-            return "\"\(value)\""
-        }
     }
 }

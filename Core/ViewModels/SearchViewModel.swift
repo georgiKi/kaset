@@ -155,18 +155,30 @@ final class SearchViewModel {
 
     /// Performs the actual search.
     private func performSearch() async {
+        // Check cancellation before updating state
+        guard !Task.isCancelled else { return }
+
         self.loadingState = .loading
         let currentQuery = self.query
         self.logger.info("Searching for: \(currentQuery)")
 
         do {
             let searchResults = try await client.search(query: currentQuery)
+
+            // Check cancellation and query change before updating results
+            // This handles the race condition where query changed during the request
+            guard !Task.isCancelled, self.query == currentQuery else {
+                self.logger.debug("Search results discarded: query changed or task cancelled")
+                return
+            }
+
             self.results = searchResults
             self.lastSearchedQuery = currentQuery
             self.loadingState = .loaded
             self.logger.info("Search complete: \(searchResults.allItems.count) results")
         } catch {
-            if !Task.isCancelled {
+            // CancellationError is thrown when task is cancelled during URLSession request
+            if !Task.isCancelled, self.query == currentQuery {
                 self.logger.error("Search failed: \(error.localizedDescription)")
                 self.loadingState = .error(LoadingError(from: error))
             }

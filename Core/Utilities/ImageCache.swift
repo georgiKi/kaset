@@ -11,6 +11,9 @@ actor ImageCache {
     /// Maximum concurrent network fetches during prefetching.
     private static let maxConcurrentPrefetch = 4
 
+    /// Maximum disk cache size in bytes (200MB).
+    private static let maxDiskCacheSize: Int64 = 200 * 1024 * 1024
+
     private let memoryCache = NSCache<NSURL, NSImage>()
     private var inFlight: [URL: Task<NSImage?, Never>] = [:]
     private let fileManager = FileManager.default
@@ -27,6 +30,11 @@ actor ImageCache {
 
         // Set up memory pressure monitoring
         Self.setupMemoryPressureMonitoring(cache: self)
+
+        // Evict disk cache if needed on startup
+        Task.detached(priority: .utility) {
+            await self.evictDiskCacheIfNeeded()
+        }
     }
 
     /// Sets up monitoring for system memory pressure notifications.
@@ -213,5 +221,47 @@ actor ImageCache {
     private func saveToDisk(url: URL, data: Data) {
         let path = self.diskCachePath(for: url)
         try? data.write(to: path, options: .atomic)
+
+        // Evict old files if disk cache exceeds limit
+        Task.detached(priority: .utility) {
+            await self.evictDiskCacheIfNeeded()
+        }
+    }
+
+    // MARK: - Disk Cache Eviction
+
+    /// Metadata for a cached file used during eviction.
+    private struct CachedFileInfo {
+        let url: URL
+        let modificationDate: Date
+        let fileSize: Int
+    }
+
+    /// Evicts oldest files until disk cache is under the size limit.
+    /// Uses LRU (Least Recently Used) eviction based on file modification dates.
+    private func evictDiskCacheIfNeeded() {
+        let currentSize = self.diskCacheSize()
+        guard currentSize > Self.maxDiskCacheSize else { return }
+
+        // Get all cached files sorted by modification date (oldest first)
+        guard let files = try? fileManager.contentsOfDirectory(
+            at: diskCacheURL,
+            includingPropertiesForKeys: [.contentModificationDateKey, .fileSizeKey],
+            options: [.skipsHiddenFiles]
+        ) else { return }
+
+        let sortedFiles = files.compactMap { url -> CachedFileInfo? in
+            guard let values = try? url.resourceValues(forKeys: [.contentModificationDateKey, .fileSizeKey]),
+                  let date = values.contentModificationDate,
+                  let size = values.fileSize
+            else { return nil }
+            return CachedFileInfo(url: url, modificationDate: date, fileSize: size)
+        }.sorted { $0.modificationDate < $1.modificationDate } // Sort by date ascending (oldest first)
+
+        var sizeToFree = currentSize - Self.maxDiskCacheSize
+        for fileInfo in sortedFiles where sizeToFree > 0 {
+            try? self.fileManager.removeItem(at: fileInfo.url)
+            sizeToFree -= Int64(fileInfo.fileSize)
+        }
     }
 }

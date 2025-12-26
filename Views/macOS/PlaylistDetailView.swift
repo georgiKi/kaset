@@ -206,7 +206,8 @@ struct PlaylistDetailView: View {
 
     private func tracksView(_ tracks: [Song], isAlbum: Bool) -> some View {
         LazyVStack(spacing: 0) {
-            ForEach(Array(tracks.enumerated()), id: \.element.id) { index, track in
+            ForEach(tracks.indices, id: \.self) { index in
+                let track = tracks[index]
                 self.trackRow(track, index: index, tracks: tracks, isAlbum: isAlbum)
 
                 if index < tracks.count - 1 {

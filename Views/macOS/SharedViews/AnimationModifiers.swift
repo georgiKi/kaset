@@ -1,17 +1,57 @@
 import SwiftUI
 
+// MARK: - AnimationCache
+
+/// Tracks which items have already been animated to avoid re-triggering on view reappear.
+/// Uses a global set since @State resets when the view is recreated.
+@MainActor
+private enum AnimationCache {
+    /// Set of item identifiers that have already been animated.
+    /// Uses a weak reference pattern via object identifiers.
+    static var animatedItems: Set<String> = []
+
+    /// Maximum cache size before cleanup.
+    private static let maxCacheSize = 500
+
+    static func hasAnimated(_ id: String) -> Bool {
+        self.animatedItems.contains(id)
+    }
+
+    static func markAnimated(_ id: String) {
+        // Cleanup if cache gets too large (prevents unbounded growth)
+        if self.animatedItems.count > self.maxCacheSize {
+            self.animatedItems.removeAll()
+        }
+        self.animatedItems.insert(id)
+    }
+
+    /// Clears the animation cache. Call when navigating to a completely new context.
+    static func reset() {
+        self.animatedItems.removeAll()
+    }
+}
+
 // MARK: - StaggeredAppearanceModifier
 
 /// A view modifier that animates content appearance with a staggered delay.
+/// Tracks already-animated items to avoid re-triggering animations on reappear.
 @available(macOS 26.0, *)
 struct StaggeredAppearanceModifier: ViewModifier {
     let index: Int
     let animation: Animation
+    /// Unique identifier for this item (defaults to index-based).
+    var itemId: String?
 
     @State private var isVisible = false
+    @State private var hasCheckedCache = false
 
     private var delay: Double {
         AppAnimation.stagger(for: self.index)
+    }
+
+    /// The cache key for this item.
+    private var cacheKey: String {
+        self.itemId ?? "stagger-\(self.index)"
     }
 
     func body(content: Content) -> some View {
@@ -19,13 +59,23 @@ struct StaggeredAppearanceModifier: ViewModifier {
             .opacity(self.isVisible ? 1 : 0)
             .offset(y: self.isVisible ? 0 : 20)
             .onAppear {
+                // Skip animation if reduce motion is enabled
                 guard !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion else {
                     self.isVisible = true
                     return
                 }
+
+                // Check if already animated (e.g., returning from detail view)
+                if AnimationCache.hasAnimated(self.cacheKey) {
+                    self.isVisible = true
+                    return
+                }
+
+                // First-time appearance: animate and cache
                 withAnimation(self.animation.delay(self.delay)) {
                     self.isVisible = true
                 }
+                AnimationCache.markAnimated(self.cacheKey)
             }
     }
 }

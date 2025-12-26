@@ -269,7 +269,8 @@ struct SearchView: View {
     private var resultsView: some View {
         ScrollView {
             LazyVStack(spacing: 0) {
-                ForEach(Array(self.viewModel.filteredItems.enumerated()), id: \.element.id) { index, item in
+                ForEach(self.viewModel.filteredItems.indices, id: \.self) { index in
+                    let item = self.viewModel.filteredItems[index]
                     self.resultRow(item, index: index)
                     Divider()
                         .padding(.leading, 72)

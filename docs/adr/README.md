@@ -42,3 +42,4 @@ What becomes easier or more difficult because of this change?
 | [0005](0005-foundation-models-architecture.md) | Foundation Models Architecture | Accepted |
 | [0006](0006-swift-testing-migration.md) | Swift Testing Migration | Accepted |
 | [0007](0007-sparkle-auto-updates.md) | Sparkle Auto-Updates | Accepted |
+| [0008](0008-nonisolated-network-helpers.md) | Nonisolated Network Helpers for MainActor Classes | Accepted |

@@ -7,7 +7,10 @@ import SwiftUI
 struct SearchView: View {
     @State var viewModel: SearchViewModel
     @Environment(PlayerService.self) private var playerService
+    @Environment(FavoritesManager.self) private var favoritesManager
+    @Environment(SongLikeStatusManager.self) private var likeStatusManager
     @State private var navigationPath = NavigationPath()
+    @State private var networkMonitor = NetworkMonitor.shared
 
     /// External trigger for focusing the search field (from keyboard shortcut).
     @Binding var focusTrigger: Bool
@@ -213,20 +216,29 @@ struct SearchView: View {
 
     @ViewBuilder
     private var contentView: some View {
-        switch self.viewModel.loadingState {
-        case .idle:
-            self.emptyStateView
-        case .loading, .loadingMore:
-            LoadingView("Searching...")
-        case .loaded:
-            if self.viewModel.filteredItems.isEmpty {
-                self.noResultsView
-            } else {
-                self.resultsView
-            }
-        case let .error(error):
-            ErrorView(error: error) {
+        if !self.networkMonitor.isConnected {
+            ErrorView(
+                title: "No Connection",
+                message: "Please check your internet connection and try again."
+            ) {
                 self.viewModel.search()
+            }
+        } else {
+            switch self.viewModel.loadingState {
+            case .idle:
+                self.emptyStateView
+            case .loading, .loadingMore:
+                LoadingView("Searching...")
+            case .loaded:
+                if self.viewModel.filteredItems.isEmpty {
+                    self.noResultsView
+                } else {
+                    self.resultsView
+                }
+            case let .error(error):
+                ErrorView(error: error) {
+                    self.viewModel.search()
+                }
             }
         }
     }
@@ -356,17 +368,11 @@ struct SearchView: View {
 
             Divider()
 
-            Button {
-                SongActionsHelper.likeSong(song, playerService: self.playerService)
-            } label: {
-                Label("Like", systemImage: "hand.thumbsup")
-            }
+            FavoritesContextMenu.menuItem(for: song, manager: self.favoritesManager)
 
-            Button {
-                SongActionsHelper.dislikeSong(song, playerService: self.playerService)
-            } label: {
-                Label("Dislike", systemImage: "hand.thumbsdown")
-            }
+            Divider()
+
+            LikeDislikeContextMenu(song: song, likeStatusManager: self.likeStatusManager)
 
             Divider()
 
@@ -415,12 +421,20 @@ struct SearchView: View {
                 Label("View Album", systemImage: "square.stack")
             }
 
+            Divider()
+
+            FavoritesContextMenu.menuItem(for: album, manager: self.favoritesManager)
+
         case let .artist(artist):
             Button {
                 self.navigationPath.append(artist)
             } label: {
                 Label("View Artist", systemImage: "person")
             }
+
+            Divider()
+
+            FavoritesContextMenu.menuItem(for: artist, manager: self.favoritesManager)
 
         case let .playlist(playlist):
             Button {
@@ -430,6 +444,12 @@ struct SearchView: View {
             } label: {
                 Label("Add to Library", systemImage: "plus.circle")
             }
+
+            Divider()
+
+            FavoritesContextMenu.menuItem(for: playlist, manager: self.favoritesManager)
+
+            Divider()
 
             Button {
                 self.navigationPath.append(playlist)
@@ -493,4 +513,5 @@ extension SearchResultItem {
     let client = YTMusicClient(authService: authService, webKitManager: .shared)
     SearchView(viewModel: SearchViewModel(client: client), focusTrigger: $focusTrigger)
         .environment(PlayerService())
+        .environment(FavoritesManager.shared)
 }

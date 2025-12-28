@@ -5,6 +5,8 @@ import SwiftUI
 struct TopSongsView: View {
     @State var viewModel: TopSongsViewModel
     @Environment(PlayerService.self) private var playerService
+    @Environment(FavoritesManager.self) private var favoritesManager
+    @Environment(SongLikeStatusManager.self) private var likeStatusManager
 
     var body: some View {
         Group {
@@ -31,7 +33,9 @@ struct TopSongsView: View {
         .navigationTitle("Top songs")
         .toolbarBackgroundVisibility(.hidden, for: .automatic)
         .safeAreaInset(edge: .bottom, spacing: 0) {
-            PlayerBar()
+            if case .error = self.viewModel.loadingState {} else {
+                PlayerBar()
+            }
         }
         .task {
             if self.viewModel.loadingState == .idle {
@@ -106,7 +110,7 @@ struct TopSongsView: View {
 
                 // Duration
                 Text(song.durationDisplay)
-                    .font(.system(size: 12, design: .monospaced))
+                    .font(.system(size: 12))
                     .foregroundStyle(.secondary)
                     .frame(width: 50, alignment: .trailing)
             }
@@ -124,17 +128,11 @@ struct TopSongsView: View {
 
             Divider()
 
-            Button {
-                SongActionsHelper.likeSong(song, playerService: self.playerService)
-            } label: {
-                Label("Like", systemImage: "hand.thumbsup")
-            }
+            FavoritesContextMenu.menuItem(for: song, manager: self.favoritesManager)
 
-            Button {
-                SongActionsHelper.dislikeSong(song, playerService: self.playerService)
-            } label: {
-                Label("Dislike", systemImage: "hand.thumbsdown")
-            }
+            Divider()
+
+            LikeDislikeContextMenu(song: song, likeStatusManager: self.likeStatusManager)
 
             Divider()
 
@@ -202,4 +200,5 @@ struct TopSongsView: View {
     let client = YTMusicClient(authService: authService, webKitManager: .shared)
     TopSongsView(viewModel: TopSongsViewModel(destination: destination, client: client))
         .environment(PlayerService())
+        .environment(FavoritesManager.shared)
 }

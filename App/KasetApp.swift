@@ -58,6 +58,8 @@ struct KasetApp: App {
     @State private var ytMusicClient: YTMusicClient?
     @State private var notificationService: NotificationService?
     @State private var updaterService = UpdaterService()
+    @State private var favoritesManager = FavoritesManager.shared
+    @State private var likeStatusManager = SongLikeStatusManager.shared
 
     /// Triggers search field focus when set to true.
     @State private var searchFocusTrigger = false
@@ -83,6 +85,7 @@ struct KasetApp: App {
 
         // Wire up dependencies
         player.setYTMusicClient(client)
+        SongLikeStatusManager.shared.setClient(client)
 
         _authService = State(initialValue: auth)
         _webKitManager = State(initialValue: webkit)
@@ -106,6 +109,8 @@ struct KasetApp: App {
                     .environment(self.authService)
                     .environment(self.webKitManager)
                     .environment(self.playerService)
+                    .environment(self.favoritesManager)
+                    .environment(self.likeStatusManager)
                     .environment(\.searchFocusTrigger, self.$searchFocusTrigger)
                     .environment(\.navigationSelection, self.$navigationSelection)
                     .environment(\.showCommandBar, self.$showCommandBar)

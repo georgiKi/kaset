@@ -109,6 +109,10 @@ struct PlayerBar: View {
                 self.volumeValue = newValue
             }
         }
+        .onAppear {
+            // Sync local volume value from saved state on initial load
+            self.volumeValue = self.playerService.volume
+        }
     }
 
     // MARK: - Center Section (track info blurs, seek bar appears on hover)
@@ -173,7 +177,7 @@ struct PlayerBar: View {
         HStack(spacing: 10) {
             // Elapsed time - show seek position while dragging, actual progress otherwise
             Text(self.formatTime(self.isSeeking ? self.seekValue * self.playerService.duration : self.playerService.progress))
-                .font(.system(size: 11, design: .monospaced))
+                .font(.system(size: 11))
                 .foregroundStyle(.secondary)
                 .frame(width: 40, alignment: .trailing)
 
@@ -191,7 +195,7 @@ struct PlayerBar: View {
 
             // Remaining time
             Text("-\(self.formatTime(self.playerService.duration - (self.isSeeking ? self.seekValue * self.playerService.duration : self.playerService.progress)))")
-                .font(.system(size: 11, design: .monospaced))
+                .font(.system(size: 11))
                 .foregroundStyle(.secondary)
                 .frame(width: 40, alignment: .leading)
         }
@@ -338,8 +342,12 @@ struct PlayerBar: View {
                     // User started dragging
                     self.isAdjustingVolume = true
                 } else {
-                    // User finished dragging - apply volume change
-                    self.performVolumeChange()
+                    // User finished dragging/clicking - apply volume change
+                    self.isAdjustingVolume = false
+                    // Always apply volume when interaction ends to ensure WebView is synced
+                    Task {
+                        await self.playerService.setVolume(self.volumeValue)
+                    }
                 }
             }
             .frame(width: 80)
@@ -356,15 +364,6 @@ struct PlayerBar: View {
                     }
                 }
             }
-        }
-    }
-
-    /// Performs the actual volume change after slider interaction ends.
-    private func performVolumeChange() {
-        guard self.isAdjustingVolume else { return }
-        Task {
-            await self.playerService.setVolume(self.volumeValue)
-            self.isAdjustingVolume = false
         }
     }
 

@@ -5,23 +5,36 @@ import SwiftUI
 struct LikedMusicView: View {
     @State var viewModel: LikedMusicViewModel
     @Environment(PlayerService.self) private var playerService
+    @Environment(FavoritesManager.self) private var favoritesManager
+    @Environment(SongLikeStatusManager.self) private var likeStatusManager
+    @State private var networkMonitor = NetworkMonitor.shared
 
     @State private var navigationPath = NavigationPath()
 
     var body: some View {
         NavigationStack(path: self.$navigationPath) {
             Group {
-                switch self.viewModel.loadingState {
-                case .idle, .loading:
-                    LoadingView("Loading liked songs...")
-                case .loaded, .loadingMore:
-                    self.contentView
-                case let .error(error):
-                    ErrorView(error: error) {
+                if !self.networkMonitor.isConnected {
+                    ErrorView(
+                        title: "No Connection",
+                        message: "Please check your internet connection and try again."
+                    ) {
                         Task { await self.viewModel.refresh() }
+                    }
+                } else {
+                    switch self.viewModel.loadingState {
+                    case .idle, .loading:
+                        LoadingView("Loading liked songs...")
+                    case .loaded, .loadingMore:
+                        self.contentView
+                    case let .error(error):
+                        ErrorView(error: error) {
+                            Task { await self.viewModel.refresh() }
+                        }
                     }
                 }
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
             .navigationTitle("Liked Music")
             .navigationDestination(for: Artist.self) { artist in
                 ArtistDetailView(
@@ -207,7 +220,7 @@ struct LikedMusicView: View {
 
                 // Duration
                 Text(song.durationDisplay)
-                    .font(.system(size: 12, design: .monospaced))
+                    .font(.system(size: 12))
                     .foregroundStyle(.secondary)
 
                 // Play indicator
@@ -229,10 +242,14 @@ struct LikedMusicView: View {
 
             Divider()
 
+            FavoritesContextMenu.menuItem(for: song, manager: self.favoritesManager)
+
+            Divider()
+
             Button {
-                SongActionsHelper.likeSong(song, playerService: self.playerService)
+                SongActionsHelper.unlikeSong(song, likeStatusManager: self.likeStatusManager)
             } label: {
-                Label("Unlike", systemImage: "heart.slash")
+                Label("Unlike", systemImage: "hand.thumbsup.fill")
             }
 
             Divider()
@@ -267,4 +284,5 @@ struct LikedMusicView: View {
     let client = YTMusicClient(authService: authService, webKitManager: .shared)
     LikedMusicView(viewModel: LikedMusicViewModel(client: client))
         .environment(PlayerService())
+        .environment(FavoritesManager.shared)
 }

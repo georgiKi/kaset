@@ -9,6 +9,8 @@ struct PlaylistDetailView: View {
     let playlist: Playlist
     @State var viewModel: PlaylistDetailViewModel
     @Environment(PlayerService.self) private var playerService
+    @Environment(FavoritesManager.self) private var favoritesManager
+    @Environment(SongLikeStatusManager.self) private var likeStatusManager
 
     /// Tracks whether this playlist has been added to library in this session.
     @State private var isAddedToLibrary: Bool = false
@@ -63,7 +65,9 @@ struct PlaylistDetailView: View {
         .navigationTitle(self.playlist.title)
         .toolbarBackgroundVisibility(.hidden, for: .automatic)
         .safeAreaInset(edge: .bottom, spacing: 0) {
-            PlayerBar()
+            if case .error = self.viewModel.loadingState {} else {
+                PlayerBar()
+            }
         }
         .task {
             if self.viewModel.loadingState == .idle {
@@ -231,7 +235,7 @@ struct PlaylistDetailView: View {
                         NowPlayingIndicator(isPlaying: self.playerService.isPlaying, size: 14)
                     } else {
                         Text("\(index + 1)")
-                            .font(.system(size: 14, design: .monospaced))
+                            .font(.system(size: 14))
                             .foregroundStyle(.secondary)
                     }
                 }
@@ -268,7 +272,7 @@ struct PlaylistDetailView: View {
 
                 // Duration
                 Text(track.durationDisplay)
-                    .font(.system(size: 12, design: .monospaced))
+                    .font(.system(size: 12))
                     .foregroundStyle(.secondary)
                     .frame(width: 45, alignment: .trailing)
             }
@@ -287,17 +291,11 @@ struct PlaylistDetailView: View {
 
             Divider()
 
-            Button {
-                SongActionsHelper.likeSong(track, playerService: self.playerService)
-            } label: {
-                Label("Like", systemImage: "hand.thumbsup")
-            }
+            FavoritesContextMenu.menuItem(for: track, manager: self.favoritesManager)
 
-            Button {
-                SongActionsHelper.dislikeSong(track, playerService: self.playerService)
-            } label: {
-                Label("Dislike", systemImage: "hand.thumbsdown")
-            }
+            Divider()
+
+            LikeDislikeContextMenu(song: track, likeStatusManager: self.likeStatusManager)
 
             Divider()
 

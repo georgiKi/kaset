@@ -66,6 +66,31 @@ struct SettingsManagerTests {
         #expect(manager.hapticFeedbackEnabled == true)
     }
 
+    @Test("Default rememberPlaybackSettings is false")
+    func defaultRememberPlaybackSettings() {
+        let manager = SettingsManager.shared
+        #expect(manager.rememberPlaybackSettings == false)
+    }
+
+    @Test("Disabling rememberPlaybackSettings clears persisted values")
+    func disablingRememberPlaybackSettingsClearsValues() {
+        let manager = SettingsManager.shared
+        let shuffleKey = "playerShuffleEnabled"
+        let repeatKey = "playerRepeatMode"
+
+        // Set up some persisted values
+        UserDefaults.standard.set(true, forKey: shuffleKey)
+        UserDefaults.standard.set("all", forKey: repeatKey)
+
+        // Enable then disable the setting
+        manager.rememberPlaybackSettings = true
+        manager.rememberPlaybackSettings = false
+
+        // Verify values are cleared
+        #expect(UserDefaults.standard.object(forKey: shuffleKey) == nil)
+        #expect(UserDefaults.standard.object(forKey: repeatKey) == nil)
+    }
+
     // MARK: - launchPage Computed Property Tests
 
     @Test("launchPage returns defaultLaunchPage for non-lastUsed")

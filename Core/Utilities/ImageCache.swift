@@ -135,13 +135,6 @@ actor ImageCache {
         }
     }
 
-    /// Legacy fire-and-forget prefetch for backward compatibility.
-    func prefetch(urls: [URL]) {
-        Task.detached(priority: .utility) {
-            await self.prefetch(urls: urls, targetSize: CGSize(width: 320, height: 320))
-        }
-    }
-
     // MARK: - Image Creation with Downsampling
 
     /// Creates an NSImage from data, optionally downsampling for memory efficiency.

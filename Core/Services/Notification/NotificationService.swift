@@ -7,7 +7,11 @@ final class NotificationService {
     private let playerService: PlayerService
     private let settingsManager: SettingsManager
     private let logger = DiagnosticsLogger.notification
-    private var observationTask: Task<Void, Never>?
+    // swiftformat:disable modifierOrder
+    /// Task accessed from deinit, which is non-isolated in Swift 6.
+    /// Using nonisolated(unsafe) since Task.cancel() is thread-safe.
+    nonisolated(unsafe) private var observationTask: Task<Void, Never>?
+    // swiftformat:enable modifierOrder
     private var lastNotifiedTrackId: String?
 
     init(playerService: PlayerService, settingsManager: SettingsManager = .shared) {

@@ -87,16 +87,22 @@ final class APICache {
         self.cache[key] = CacheEntry(data: data, timestamp: now, ttl: ttl)
     }
 
+    private static let logger = DiagnosticsLogger.api
+
     /// Generates a stable, deterministic cache key from endpoint and request body.
     /// Uses SHA256 hash of sorted JSON to ensure consistency.
     static func stableCacheKey(endpoint: String, body: [String: Any]) -> String {
         // Use JSONSerialization with .sortedKeys for deterministic output
         // This is more efficient than custom recursive string building
-        let jsonData: Data = if #available(macOS 10.13, *) {
-            (try? JSONSerialization.data(withJSONObject: body, options: [.sortedKeys])) ?? Data()
-        } else {
-            // Fallback for older macOS (shouldn't happen with macOS 26 target)
-            (try? JSONSerialization.data(withJSONObject: body)) ?? Data()
+        let jsonData: Data
+        do {
+            // .sortedKeys available since macOS 10.13, we target macOS 26+
+            jsonData = try JSONSerialization.data(withJSONObject: body, options: [.sortedKeys])
+        } catch {
+            // Log the error and use endpoint-only key to avoid collisions
+            Self.logger.error("APICache: Failed to serialize body for cache key: \(error.localizedDescription)")
+            // Return endpoint-only key with error marker to avoid collisions
+            return "\(endpoint):serialization_error_\(body.count)"
         }
         let hash = SHA256.hash(data: jsonData)
         let hashString = hash.prefix(16).compactMap { String(format: "%02x", $0) }.joined()

@@ -105,7 +105,8 @@ enum SongMetadataParser {
             {
                 browseId
             } else {
-                UUID().uuidString
+                // Generate stable ID from artist name when no browse ID available
+                ParsingHelpers.stableId(title: "artist", components: text)
             }
             artists.append(Artist(id: artistId, name: text))
         }

@@ -319,11 +319,6 @@ final class PlayerService: NSObject, PlayerServiceProtocol {
 
     /// Updates playback state from the persistent WebView observer.
     func updatePlaybackState(isPlaying: Bool, progress: Double, duration: Double) {
-        // Debug log once per second (when progress changes by at least 1 second)
-        if Int(progress) != Int(self.progress) {
-            self.logger.debug("updatePlaybackState: isPlaying=\(isPlaying), progress=\(Int(progress)), duration=\(Int(duration))")
-        }
-
         let previousProgress = self.progress
         self.progress = progress
         self.duration = duration

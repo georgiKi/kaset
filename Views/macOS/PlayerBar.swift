@@ -1,4 +1,3 @@
-import AVKit
 import SwiftUI
 
 // MARK: - PlayerBar
@@ -382,8 +381,19 @@ struct PlayerBar: View {
             self.actionButtons
 
             // AirPlay button
-            AirPlayButton()
-                .frame(width: 20, height: 20)
+            Button {
+                HapticService.toggle()
+                self.playerService.showAirPlayPicker()
+            } label: {
+                Image(systemName: "airplayaudio")
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundStyle(self.playerService.isAirPlayConnected ? .red : .primary.opacity(0.85))
+                    .contentTransition(.symbolEffect(.replace))
+            }
+            .buttonStyle(.pressable)
+            .accessibilityIdentifier(AccessibilityID.PlayerBar.airplayButton)
+            .accessibilityLabel(self.playerService.isAirPlayConnected ? "AirPlay Connected" : "AirPlay")
+            .disabled(self.playerService.currentTrack == nil)
 
             Divider()
                 .frame(height: 20)
@@ -535,22 +545,6 @@ struct PlayerBar: View {
         } else {
             return "speaker.wave.2.fill"
         }
-    }
-}
-
-// MARK: - AirPlayButton
-
-/// A SwiftUI wrapper for AVRoutePickerView to show AirPlay destinations.
-@available(macOS 26.0, *)
-struct AirPlayButton: NSViewRepresentable {
-    func makeNSView(context _: Context) -> AVRoutePickerView {
-        let routePickerView = AVRoutePickerView()
-        routePickerView.isRoutePickerButtonBordered = false
-        return routePickerView
-    }
-
-    func updateNSView(_: AVRoutePickerView, context _: Context) {
-        // No updates needed
     }
 }
 
